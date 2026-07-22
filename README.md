@@ -52,6 +52,8 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 # Browse controller configuration domains.
 .venv/bin/omnicorectl --insecure cfg domains
 .venv/bin/omnicorectl --insecure cfg types EIO
+.venv/bin/omnicorectl --insecure cfg instances EIO ETHERCAT_INTERNAL_DEVICE
+.venv/bin/omnicorectl --insecure cfg instances EIO EIO_SIGNAL --json
 ```
 
 Global connection options must precede the command group. `--host` and

@@ -34,9 +34,18 @@ def state_resources(payload: Any, *, resource: str) -> list[dict[str, Any]]:
 
 
 def required_text(state: dict[str, Any], key: str, *, resource: str) -> str:
-    value = state.get(key)
-    if not isinstance(value, str) or not value:
+    value = required_string(state, key, resource=resource)
+    if not value:
         raise ProtocolError(f"{resource}: missing text field {key!r}")
+    return value
+
+
+def required_string(state: dict[str, Any], key: str, *, resource: str) -> str:
+    """Read a string field while allowing the empty string as a valid value."""
+
+    value = state.get(key)
+    if not isinstance(value, str):
+        raise ProtocolError(f"{resource}: missing string field {key!r}")
     return value
 
 

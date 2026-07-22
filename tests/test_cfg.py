@@ -69,6 +69,55 @@ class CfgTests(unittest.TestCase):
         )
         self.assertTrue(all(cfg_type.domain == "EIO" for cfg_type in cfg_types))
 
+    def test_lists_all_instance_pages_and_preserves_empty_attributes(self) -> None:
+        def instance(name: str, instance_id: str) -> dict[str, object]:
+            return {
+                "_type": "cfg-dt-instance-li",
+                "_title": name,
+                "rdonly": "false",
+                "instanceid": instance_id,
+                "attrib": [
+                    {"_type": "cfg-ia-t", "_title": "Name", "value": name},
+                    {"_type": "cfg-ia-t", "_title": "Label", "value": ""},
+                ],
+            }
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            self.assertEqual(request.url.path, "/rw/cfg/EIO/EIO_SIGNAL/instances")
+            if request.url.params["start"] == "0":
+                return httpx.Response(
+                    200,
+                    json={
+                        "_links": {"next": {"href": "ignored-escaped-link"}},
+                        "_embedded": {"resources": [instance("Signal1", "10")]},
+                    },
+                )
+            self.assertEqual(request.url.params["start"], "1")
+            return httpx.Response(
+                200,
+                json={
+                    "_links": {},
+                    "_embedded": {"resources": [instance("Signal2", "11")]},
+                },
+            )
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            instances = CfgService(client).list_instances(
+                "EIO", "EIO_SIGNAL", page_size=1
+            )
+
+        self.assertEqual([item.name for item in instances], ["Signal1", "Signal2"])
+        self.assertEqual(instances[0].attributes["Label"], "")
+        self.assertFalse(instances[0].read_only)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,7 +19,7 @@ from omnicorectl.errors import (
     ProtocolError,
 )
 from omnicorectl.rws import RwsClient
-from omnicorectl.services.cfg import CfgDomain, CfgService, CfgType
+from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgService, CfgType
 from omnicorectl.services.controller import ControllerService, ControllerStatus
 from omnicorectl.services.io import (
     IoDevice,
@@ -95,6 +95,10 @@ def build_parser() -> argparse.ArgumentParser:
     cfg_types = cfg_commands.add_parser("types", help="list types in a CFG domain")
     cfg_types.add_argument("domain", help="CFG domain, for example EIO")
     cfg_types.add_argument("--json", action="store_true", dest="as_json")
+    instances = cfg_commands.add_parser("instances", help="list CFG type instances")
+    instances.add_argument("domain")
+    instances.add_argument("cfg_type")
+    instances.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -159,6 +163,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             if (args.group, args.command) == ("cfg", "types"):
                 cfg_types = CfgService(client).list_types(args.domain)
                 print(_format_cfg_types(cfg_types, as_json=args.as_json))
+                return 0
+            if (args.group, args.command) == ("cfg", "instances"):
+                instances = CfgService(client).list_instances(
+                    args.domain, args.cfg_type
+                )
+                print(_format_cfg_instances(instances, as_json=args.as_json))
                 return 0
         raise ConfigurationError("unsupported command")
     except ConfigurationError as exc:
@@ -372,6 +382,32 @@ def _format_cfg_types(cfg_types: list[CfgType], *, as_json: bool) -> str:
     if not cfg_types:
         return "No CFG types found."
     return "\n".join(cfg_type.name for cfg_type in cfg_types)
+
+
+def _format_cfg_instances(instances: list[CfgInstance], *, as_json: bool) -> str:
+    if as_json:
+        return json.dumps(
+            [asdict(instance) for instance in instances], indent=2, ensure_ascii=False
+        )
+    if not instances:
+        return "No CFG instances found."
+    headings = ("NAME", "INSTANCE ID", "READ ONLY")
+    rows = [
+        (instance.name, instance.instance_id, "yes" if instance.read_only else "no")
+        for instance in instances
+    ]
+    widths = [
+        max(len(headings[index]), *(len(row[index]) for row in rows))
+        for index in range(len(headings))
+    ]
+
+    def format_row(row: tuple[str, ...]) -> str:
+        return "  ".join(value.ljust(widths[index]) for index, value in enumerate(row))
+
+    separator = tuple("-" * width for width in widths)
+    return "\n".join(
+        (format_row(headings), format_row(separator), *(format_row(row) for row in rows))
+    )
 
 
 def _password() -> str:
