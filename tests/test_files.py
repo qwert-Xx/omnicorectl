@@ -95,6 +95,51 @@ class FileServiceTests(unittest.TestCase):
 
             self.assertEqual(list(Path(directory).glob("*.part")), [])
 
+    def test_uploads_binary_file_after_remote_existence_check(self) -> None:
+        content = b"upload\x00contents\xff"
+        calls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            calls.append(f"{request.method} {request.url.path}")
+            if request.method == "GET":
+                return httpx.Response(
+                    200, json={"_embedded": {"resources": []}}
+                )
+            self.assertEqual(request.method, "PUT")
+            self.assertEqual(
+                request.url.raw_path, b"/fileservice/%24TEMP/test%20upload.bin"
+            )
+            self.assertEqual(
+                request.headers["content-type"],
+                "application/octet-stream;v=2.0",
+            )
+            self.assertEqual(int(request.headers["content-length"]), len(content))
+            self.assertEqual(request.content, content)
+            return httpx.Response(201)
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "source.bin"
+            source.write_bytes(content)
+            with RwsClient(
+                "192.0.2.1",
+                "test-user",
+                "test-password",
+                transport=httpx.MockTransport(handler),
+                request_interval=0,
+            ) as client:
+                result = FileService(client).upload_file(
+                    source, "$TEMP/test upload.bin"
+                )
+
+        self.assertEqual(result.bytes_written, len(content))
+        self.assertEqual(result.remote_path, "/$TEMP/test upload.bin")
+        self.assertEqual(
+            calls,
+            ["GET /fileservice/$TEMP", "PUT /fileservice/$TEMP/test upload.bin"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import PurePosixPath
 from urllib.parse import quote
 
 from omnicorectl.errors import ConfigurationError, ProtocolError
@@ -33,6 +34,13 @@ class FileEntry:
 class DownloadResult:
     remote_path: str
     local_path: str
+    bytes_written: int
+
+
+@dataclass(frozen=True, slots=True)
+class UploadResult:
+    local_path: str
+    remote_path: str
     bytes_written: int
 
 
@@ -115,6 +123,31 @@ class FileService:
         return DownloadResult(
             remote_path=normalized,
             local_path=str(destination),
+            bytes_written=bytes_written,
+        )
+
+    def upload_file(
+        self, local_path: Path, remote_path: str, *, overwrite: bool = False
+    ) -> UploadResult:
+        source = local_path.expanduser().resolve()
+        if not source.is_file():
+            raise ConfigurationError(f"local file does not exist: {source}")
+        normalized, endpoint = _file_endpoint(remote_path)
+        if normalized == "/":
+            raise ConfigurationError("a remote file path is required for upload")
+        remote = PurePosixPath(normalized)
+        parent = str(remote.parent)
+        if not overwrite and any(
+            entry.name == remote.name for entry in self.list_directory(parent)
+        ):
+            raise ConfigurationError(f"remote file already exists: {normalized}")
+
+        size = source.stat().st_size
+        with source.open("rb") as stream:
+            bytes_written = self._client.upload(endpoint, stream, size=size)
+        return UploadResult(
+            local_path=str(source),
+            remote_path=normalized,
             bytes_written=bytes_written,
         )
 

@@ -10,7 +10,7 @@ from omnicorectl.services.backup import BackupStatus
 from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgType
 from omnicorectl.services.controller import ControllerStatus
 from omnicorectl.services.control_station import WriteAccessStatus
-from omnicorectl.services.files import DownloadResult, FileEntry
+from omnicorectl.services.files import DownloadResult, FileEntry, UploadResult
 from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal, IoSignalDetails
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
 
@@ -221,6 +221,12 @@ def format_download_result(result: DownloadResult, *, as_json: bool) -> str:
     if as_json:
         return _json_object(result)
     return f"Downloaded {result.remote_path} -> {result.local_path} ({result.bytes_written} bytes)"
+
+
+def format_upload_result(result: UploadResult, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(result)
+    return f"Uploaded {result.local_path} -> {result.remote_path} ({result.bytes_written} bytes)"
 
 
 def format_backup_status(status: BackupStatus, *, as_json: bool) -> str:

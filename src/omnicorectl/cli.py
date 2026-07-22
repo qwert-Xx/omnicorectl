@@ -5,9 +5,11 @@ from __future__ import annotations
 import argparse
 import getpass
 import os
+import socket
 import sys
 from pathlib import Path
 from typing import Sequence
+from uuid import UUID, uuid5
 
 from omnicorectl.errors import (
     AuthenticationError,
@@ -32,6 +34,7 @@ from omnicorectl.output import (
     format_signals,
     format_status,
     format_tasks,
+    format_upload_result,
     format_write_access_status,
     write_source,
 )
@@ -39,7 +42,10 @@ from omnicorectl.rws import RwsClient
 from omnicorectl.services.backup import BackupService
 from omnicorectl.services.cfg import CfgService
 from omnicorectl.services.controller import ControllerService
-from omnicorectl.services.control_station import ControlStationService
+from omnicorectl.services.control_station import (
+    ControlStationService,
+    RemoteControlStation,
+)
 from omnicorectl.services.files import FileService
 from omnicorectl.services.io import IoService
 from omnicorectl.services.rapid import RapidService
@@ -63,6 +69,16 @@ def build_parser() -> argparse.ArgumentParser:
         type=_positive_float,
         default=os.getenv("OMNICORE_TIMEOUT", "10"),
         metavar="SECONDS",
+    )
+    parser.add_argument(
+        "--station-name",
+        default=os.getenv("OMNICORE_STATION_NAME", f"omnicorectl@{socket.gethostname()}"),
+        help="RW8 remote Control Station display name for write commands",
+    )
+    parser.add_argument(
+        "--station-id",
+        default=os.getenv("OMNICORE_STATION_ID"),
+        help="stable Control Station UUID; derived from host and user by default",
     )
 
     groups = parser.add_subparsers(dest="group", required=True)
@@ -152,6 +168,11 @@ def _add_file_commands(groups: argparse._SubParsersAction) -> None:
     download.add_argument("local_path")
     download.add_argument("--force", action="store_true")
     download.add_argument("--json", action="store_true", dest="as_json")
+    upload = commands.add_parser("upload", help="upload one local file")
+    upload.add_argument("local_path")
+    upload.add_argument("remote_path")
+    upload.add_argument("--force", action="store_true")
+    upload.add_argument("--json", action="store_true", dest="as_json")
 
 
 def _add_backup_commands(groups: argparse._SubParsersAction) -> None:
@@ -254,6 +275,14 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
             args.remote_path, Path(args.local_path), overwrite=args.force
         )
         print(format_download_result(result, as_json=args.as_json))
+    elif command == ("file", "upload"):
+        files = FileService(client)
+        station = _remote_control_station(args)
+        with ControlStationService(client).write_access(station):
+            result = files.upload_file(
+                Path(args.local_path), args.remote_path, overwrite=args.force
+            )
+        print(format_upload_result(result, as_json=args.as_json))
     elif command == ("backup", "status"):
         print(format_backup_status(BackupService(client).status(), as_json=args.as_json))
     elif command == ("controlstation", "status"):
@@ -273,6 +302,21 @@ def _password() -> str:
             "OMNICORE_PASSWORD is required when standard input is not interactive"
         )
     return _required(getpass.getpass("Controller password: "), "controller password")
+
+
+def _remote_control_station(args: argparse.Namespace) -> RemoteControlStation:
+    station_id = args.station_id
+    if station_id is None:
+        identity = f"{socket.gethostname()}|{args.host}|{args.username}"
+        station_id = str(uuid5(UUID("5b4e01a8-87d8-4d1b-83c3-c43952738f13"), identity))
+    pin = os.getenv("OMNICORE_CONTROL_STATION_PIN")
+    if pin is None:
+        if not sys.stdin.isatty():
+            raise ConfigurationError(
+                "OMNICORE_CONTROL_STATION_PIN is required for non-interactive writes"
+            )
+        pin = getpass.getpass("Control Station PIN: ")
+    return RemoteControlStation(args.station_name, station_id, pin)
 
 
 def _required(value: str | None, label: str) -> str:

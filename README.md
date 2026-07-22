@@ -19,6 +19,8 @@ python3 -m venv .venv
 export OMNICORE_HOST=192.168.125.1
 export OMNICORE_USERNAME=codex
 export OMNICORE_PASSWORD='set-this-outside-shell-history'
+# Required only by write commands; this is a client-selected numeric PIN.
+export OMNICORE_CONTROL_STATION_PIN='set-a-numeric-pin'
 
 # Factory OmniCore certificates are normally self-signed.
 .venv/bin/omnicorectl --insecure controller status
@@ -62,6 +64,9 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 
 # Stream a controller file to an atomic local destination; --force allows replacement.
 .venv/bin/omnicorectl --insecure file download '$HOME/sc_vsm_metadata.xml' ./sc_vsm_metadata.xml
+
+# Upload defaults to no-overwrite and uses scoped RW8 write access.
+.venv/bin/omnicorectl --insecure file upload ./local.bin '$TEMP/local.bin'
 
 # Read the controller backup engine state.
 .venv/bin/omnicorectl --insecure backup status

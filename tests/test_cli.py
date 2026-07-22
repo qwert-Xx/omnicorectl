@@ -23,13 +23,14 @@ from omnicorectl.output import (
     format_signals,
     format_status,
     format_tasks,
+    format_upload_result,
     format_write_access_status,
     write_source,
 )
 from omnicorectl.services.controller import ControllerStatus
 from omnicorectl.services.control_station import WriteAccessStatus
 from omnicorectl.services.backup import BackupStatus
-from omnicorectl.services.files import DownloadResult, FileEntry
+from omnicorectl.services.files import DownloadResult, FileEntry, UploadResult
 from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgType
 from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal, IoSignalDetails
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
@@ -254,6 +255,14 @@ class CliTests(unittest.TestCase):
         self.assertIn("123 bytes", text)
         data = json.loads(format_download_result(result, as_json=True))
         self.assertEqual(data["remote_path"], "/$HOME/test.bin")
+
+    def test_upload_result_text_and_json(self) -> None:
+        result = UploadResult("/tmp/test.bin", "/$TEMP/test.bin", 123)
+        text = format_upload_result(result, as_json=False)
+        self.assertIn("Uploaded", text)
+        self.assertIn("123 bytes", text)
+        data = json.loads(format_upload_result(result, as_json=True))
+        self.assertEqual(data["remote_path"], "/$TEMP/test.bin")
 
 
 if __name__ == "__main__":

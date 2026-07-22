@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any, BinaryIO
 
 import httpx
@@ -119,6 +119,38 @@ class RwsClient:
             raise NetworkError(f"request timed out: GET {path}") from exc
         except httpx.RequestError as exc:
             raise NetworkError(f"controller connection failed: {exc}") from exc
+        return total
+
+    def upload(self, path: str, source: BinaryIO, *, size: int) -> int:
+        """Stream an open binary source to one controller file resource."""
+
+        self._throttle()
+        total = 0
+
+        def chunks() -> Iterator[bytes]:
+            nonlocal total
+            while chunk := source.read(64 * 1024):
+                total += len(chunk)
+                yield chunk
+
+        try:
+            response = self._client.put(
+                path,
+                content=chunks(),
+                headers={
+                    "Content-Type": "application/octet-stream;v=2.0",
+                    "Content-Length": str(size),
+                },
+            )
+        except httpx.TimeoutException as exc:
+            raise NetworkError(f"request timed out: PUT {path}") from exc
+        except httpx.RequestError as exc:
+            raise NetworkError(f"controller connection failed: {exc}") from exc
+        self._raise_for_status(response, "PUT", path)
+        if total != size:
+            raise ProtocolError(
+                f"local file changed during upload: expected {size} bytes, read {total}"
+            )
         return total
 
     def close(self) -> None:
