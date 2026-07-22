@@ -13,6 +13,7 @@ from omnicorectl.cli import (
     _format_cfg_domains,
     _format_cfg_types,
     _format_cfg_instances,
+    _format_cfg_instance,
     _format_networks,
     _format_signals,
     _format_signal_details,
@@ -186,6 +187,21 @@ class CliTests(unittest.TestCase):
         self.assertIn("Signal1", table)
         data = json.loads(_format_cfg_instances(instances, as_json=True))
         self.assertEqual(data[0]["attributes"]["Name"], "Signal1")
+
+    def test_cfg_instance_details_text_and_json(self) -> None:
+        instance = CfgInstance(
+            "EIO",
+            "ETHERCAT_INTERNAL_DEVICE",
+            "EC_Internal_Device",
+            "42",
+            False,
+            {"OutputSize": "64", "Label": ""},
+        )
+        text = _format_cfg_instance(instance, as_json=False)
+        self.assertIn("EIO/ETHERCAT_INTERNAL_DEVICE/EC_Internal_Device", text)
+        self.assertIn("OutputSize  64", text)
+        data = json.loads(_format_cfg_instance(instance, as_json=True))
+        self.assertEqual(data["instance_id"], "42")
 
 
 if __name__ == "__main__":

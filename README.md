@@ -54,6 +54,7 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 .venv/bin/omnicorectl --insecure cfg types EIO
 .venv/bin/omnicorectl --insecure cfg instances EIO ETHERCAT_INTERNAL_DEVICE
 .venv/bin/omnicorectl --insecure cfg instances EIO EIO_SIGNAL --json
+.venv/bin/omnicorectl --insecure cfg get EIO ETHERCAT_INTERNAL_DEVICE EC_Internal_Device
 ```
 
 Global connection options must precede the command group. `--host` and

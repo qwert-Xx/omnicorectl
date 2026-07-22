@@ -9,6 +9,7 @@ from omnicorectl.rws.client import RwsClient
 from omnicorectl.errors import ProtocolError
 from omnicorectl.rws.hal import (
     embedded_resources,
+    first_state,
     has_next_link,
     required_bool,
     required_string,
@@ -83,38 +84,56 @@ class CfgService:
             for item in resources:
                 if item.get("_type") != "cfg-dt-instance-li":
                     continue
-                attributes_raw = item.get("attrib")
-                if not isinstance(attributes_raw, list):
-                    raise ProtocolError("CFG instance: attributes is not a list")
-                attributes: dict[str, str] = {}
-                for attribute in attributes_raw:
-                    if not isinstance(attribute, dict):
-                        raise ProtocolError("CFG instance: attribute is not an object")
-                    if attribute.get("_type") != "cfg-ia-t":
-                        continue
-                    key = required_text(
-                        attribute, "_title", resource="CFG attribute"
-                    )
-                    attributes[key] = required_string(
-                        attribute, "value", resource="CFG attribute"
-                    )
-                instances.append(
-                    CfgInstance(
-                        domain=domain,
-                        cfg_type=cfg_type,
-                        name=required_text(
-                            item, "_title", resource="CFG instance"
-                        ),
-                        instance_id=required_text(
-                            item, "instanceid", resource="CFG instance"
-                        ),
-                        read_only=required_bool(
-                            item, "rdonly", resource="CFG instance"
-                        ),
-                        attributes=attributes,
-                    )
-                )
+                instances.append(_parse_instance(item, domain, cfg_type))
 
             if not has_next_link(payload, resource="CFG instances"):
                 return instances
             start += page_size
+
+    def get_instance(
+        self, domain: str, cfg_type: str, instance: str
+    ) -> CfgInstance:
+        path = "/rw/cfg/{}/{}/instances/{}".format(
+            quote(domain, safe=""),
+            quote(cfg_type, safe=""),
+            quote(instance, safe=""),
+        )
+        item = first_state(
+            self._client.get_json(path),
+            resource=f"CFG instance {domain}/{cfg_type}/{instance}",
+        )
+        if item.get("_type") != "cfg-dt-instance":
+            raise ProtocolError(
+                f"CFG instance {domain}/{cfg_type}/{instance}: unexpected resource type"
+            )
+        return _parse_instance(item, domain, cfg_type)
+
+
+def _parse_instance(
+    item: dict[str, object], domain: str, cfg_type: str
+) -> CfgInstance:
+    attributes_raw = item.get("attrib")
+    if not isinstance(attributes_raw, list):
+        raise ProtocolError("CFG instance: attributes is not a list")
+    attributes: dict[str, str] = {}
+    for attribute in attributes_raw:
+        if not isinstance(attribute, dict):
+            raise ProtocolError("CFG instance: attribute is not an object")
+        if attribute.get("_type") != "cfg-ia-t":
+            continue
+        key = required_text(attribute, "_title", resource="CFG attribute")
+        attributes[key] = required_string(
+            attribute, "value", resource="CFG attribute"
+        )
+
+    raw_instance_id = item.get("instanceid")
+    if isinstance(raw_instance_id, bool) or not isinstance(raw_instance_id, (str, int)):
+        raise ProtocolError("CFG instance: invalid instanceid")
+    return CfgInstance(
+        domain=domain,
+        cfg_type=cfg_type,
+        name=required_text(item, "_title", resource="CFG instance"),
+        instance_id=str(raw_instance_id),
+        read_only=required_bool(item, "rdonly", resource="CFG instance"),
+        attributes=attributes,
+    )

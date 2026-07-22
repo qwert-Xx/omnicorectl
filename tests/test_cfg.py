@@ -118,6 +118,48 @@ class CfgTests(unittest.TestCase):
         self.assertEqual(instances[0].attributes["Label"], "")
         self.assertFalse(instances[0].read_only)
 
+    def test_gets_one_instance_with_numeric_instance_id(self) -> None:
+        payload = {
+            "state": [
+                {
+                    "_type": "cfg-dt-instance",
+                    "_title": "EC_Internal_Device",
+                    "rdonly": "false",
+                    "instanceid": 6655648,
+                    "attrib": [
+                        {
+                            "_type": "cfg-ia-t",
+                            "_title": "OutputSize",
+                            "value": "64",
+                        }
+                    ],
+                }
+            ]
+        }
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            self.assertEqual(
+                request.url.path,
+                "/rw/cfg/EIO/ETHERCAT_INTERNAL_DEVICE/instances/EC_Internal_Device",
+            )
+            return httpx.Response(200, json=payload)
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            instance = CfgService(client).get_instance(
+                "EIO", "ETHERCAT_INTERNAL_DEVICE", "EC_Internal_Device"
+            )
+
+        self.assertEqual(instance.instance_id, "6655648")
+        self.assertEqual(instance.attributes, {"OutputSize": "64"})
+
 
 if __name__ == "__main__":
     unittest.main()

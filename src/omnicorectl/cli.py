@@ -99,6 +99,11 @@ def build_parser() -> argparse.ArgumentParser:
     instances.add_argument("domain")
     instances.add_argument("cfg_type")
     instances.add_argument("--json", action="store_true", dest="as_json")
+    cfg_get = cfg_commands.add_parser("get", help="read one CFG instance")
+    cfg_get.add_argument("domain")
+    cfg_get.add_argument("cfg_type")
+    cfg_get.add_argument("instance")
+    cfg_get.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -169,6 +174,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     args.domain, args.cfg_type
                 )
                 print(_format_cfg_instances(instances, as_json=args.as_json))
+                return 0
+            if (args.group, args.command) == ("cfg", "get"):
+                instance = CfgService(client).get_instance(
+                    args.domain, args.cfg_type, args.instance
+                )
+                print(_format_cfg_instance(instance, as_json=args.as_json))
                 return 0
         raise ConfigurationError("unsupported command")
     except ConfigurationError as exc:
@@ -408,6 +419,26 @@ def _format_cfg_instances(instances: list[CfgInstance], *, as_json: bool) -> str
     return "\n".join(
         (format_row(headings), format_row(separator), *(format_row(row) for row in rows))
     )
+
+
+def _format_cfg_instance(instance: CfgInstance, *, as_json: bool) -> str:
+    if as_json:
+        return json.dumps(asdict(instance), indent=2, ensure_ascii=False)
+    lines = [
+        f"Instance:     {instance.domain}/{instance.cfg_type}/{instance.name}",
+        f"Instance ID:  {instance.instance_id}",
+        f"Read only:    {'yes' if instance.read_only else 'no'}",
+        "Attributes:",
+    ]
+    if not instance.attributes:
+        lines.append("  (none)")
+    else:
+        width = max(len(key) for key in instance.attributes)
+        lines.extend(
+            f"  {key.ljust(width)}  {value}"
+            for key, value in instance.attributes.items()
+        )
+    return "\n".join(lines)
 
 
 def _password() -> str:
