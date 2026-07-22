@@ -19,7 +19,7 @@ from omnicorectl.errors import (
     ProtocolError,
 )
 from omnicorectl.rws import RwsClient
-from omnicorectl.services.cfg import CfgDomain, CfgService
+from omnicorectl.services.cfg import CfgDomain, CfgService, CfgType
 from omnicorectl.services.controller import ControllerService, ControllerStatus
 from omnicorectl.services.io import (
     IoDevice,
@@ -92,6 +92,9 @@ def build_parser() -> argparse.ArgumentParser:
     cfg_commands = cfg.add_subparsers(dest="command", required=True)
     domains = cfg_commands.add_parser("domains", help="list CFG domains")
     domains.add_argument("--json", action="store_true", dest="as_json")
+    cfg_types = cfg_commands.add_parser("types", help="list types in a CFG domain")
+    cfg_types.add_argument("domain", help="CFG domain, for example EIO")
+    cfg_types.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -152,6 +155,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if (args.group, args.command) == ("cfg", "domains"):
                 domains = CfgService(client).list_domains()
                 print(_format_cfg_domains(domains, as_json=args.as_json))
+                return 0
+            if (args.group, args.command) == ("cfg", "types"):
+                cfg_types = CfgService(client).list_types(args.domain)
+                print(_format_cfg_types(cfg_types, as_json=args.as_json))
                 return 0
         raise ConfigurationError("unsupported command")
     except ConfigurationError as exc:
@@ -355,6 +362,16 @@ def _format_cfg_domains(domains: list[CfgDomain], *, as_json: bool) -> str:
     if not domains:
         return "No CFG domains found."
     return "\n".join(domain.name for domain in domains)
+
+
+def _format_cfg_types(cfg_types: list[CfgType], *, as_json: bool) -> str:
+    if as_json:
+        return json.dumps(
+            [asdict(cfg_type) for cfg_type in cfg_types], indent=2, ensure_ascii=False
+        )
+    if not cfg_types:
+        return "No CFG types found."
+    return "\n".join(cfg_type.name for cfg_type in cfg_types)
 
 
 def _password() -> str:

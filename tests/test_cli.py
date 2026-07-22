@@ -11,6 +11,7 @@ from omnicorectl.cli import (
     _format_modules,
     _format_devices,
     _format_cfg_domains,
+    _format_cfg_types,
     _format_networks,
     _format_signals,
     _format_signal_details,
@@ -21,7 +22,7 @@ from omnicorectl.cli import (
     main,
 )
 from omnicorectl.services.controller import ControllerStatus
-from omnicorectl.services.cfg import CfgDomain
+from omnicorectl.services.cfg import CfgDomain, CfgType
 from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal, IoSignalDetails
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
 
@@ -167,6 +168,13 @@ class CliTests(unittest.TestCase):
         self.assertEqual(_format_cfg_domains(domains, as_json=False), "EIO\nMOC")
         data = json.loads(_format_cfg_domains(domains, as_json=True))
         self.assertEqual(data, [{"name": "EIO"}, {"name": "MOC"}])
+
+    def test_cfg_types_text_and_json(self) -> None:
+        cfg_types = [CfgType("EIO", "EIO_SIGNAL"), CfgType("EIO", "ETHERCAT_NETWORK")]
+        text = _format_cfg_types(cfg_types, as_json=False)
+        self.assertEqual(text, "EIO_SIGNAL\nETHERCAT_NETWORK")
+        data = json.loads(_format_cfg_types(cfg_types, as_json=True))
+        self.assertEqual(data[0], {"domain": "EIO", "name": "EIO_SIGNAL"})
 
 
 if __name__ == "__main__":
