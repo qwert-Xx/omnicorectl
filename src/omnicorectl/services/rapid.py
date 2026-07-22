@@ -9,7 +9,9 @@ from omnicorectl.rws.client import RwsClient
 from omnicorectl.rws.hal import (
     embedded_resources,
     required_bool,
+    required_int,
     required_text,
+    first_state,
     state_resources,
 )
 
@@ -29,6 +31,15 @@ class RapidModule:
     task: str
     name: str
     module_type: str
+
+
+@dataclass(frozen=True, slots=True)
+class ModuleSource:
+    task: str
+    module: str
+    change_count: int
+    reported_length: int
+    source: str
 
 
 class RapidService:
@@ -81,3 +92,26 @@ class RapidService:
                 )
             )
         return modules
+
+    def get_module_source(self, task: str, module: str) -> ModuleSource:
+        task_path = quote(task, safe="")
+        module_path = quote(module, safe="")
+        state = first_state(
+            self._client.get_json(
+                f"/rw/rapid/tasks/{task_path}/modules/{module_path}/text"
+            ),
+            resource=f"RAPID source {task}/{module}",
+        )
+        return ModuleSource(
+            task=task,
+            module=module,
+            change_count=required_int(
+                state, "change-count", resource="RAPID module source"
+            ),
+            reported_length=required_int(
+                state, "module-length", resource="RAPID module source"
+            ),
+            source=required_text(
+                state, "module-text", resource="RAPID module source"
+            ),
+        )

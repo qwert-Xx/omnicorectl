@@ -20,7 +20,7 @@ from omnicorectl.errors import (
 )
 from omnicorectl.rws import RwsClient
 from omnicorectl.services.controller import ControllerService, ControllerStatus
-from omnicorectl.services.rapid import RapidModule, RapidService, RapidTask
+from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidService, RapidTask
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -56,6 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
     modules = rapid_commands.add_parser("modules", help="list modules in a RAPID task")
     modules.add_argument("task", help="RAPID task name, for example T_ROB1")
     modules.add_argument("--json", action="store_true", dest="as_json")
+    read = rapid_commands.add_parser("read", help="write RAPID module source to stdout")
+    read.add_argument("task", help="RAPID task name, for example T_ROB1")
+    read.add_argument("module", help="RAPID module name")
+    read.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -85,6 +89,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if (args.group, args.command) == ("rapid", "modules"):
                 modules = RapidService(client).list_modules(args.task)
                 print(_format_modules(modules, as_json=args.as_json))
+                return 0
+            if (args.group, args.command) == ("rapid", "read"):
+                source = RapidService(client).get_module_source(args.task, args.module)
+                _write_source(source, as_json=args.as_json)
                 return 0
         raise ConfigurationError("unsupported command")
     except ConfigurationError as exc:
@@ -159,6 +167,15 @@ def _format_modules(modules: list[RapidModule], *, as_json: bool) -> str:
         for module in modules
     )
     return "\n".join(lines)
+
+
+def _write_source(module: ModuleSource, *, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(asdict(module), indent=2, ensure_ascii=False))
+        return
+    sys.stdout.write(module.source)
+    if not module.source.endswith("\n"):
+        sys.stdout.write("\n")
 
 
 def _password() -> str:

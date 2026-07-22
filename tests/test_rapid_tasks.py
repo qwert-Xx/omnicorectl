@@ -96,6 +96,41 @@ class RapidTasksTests(unittest.TestCase):
         self.assertEqual([module.name for module in modules], ["BASE", "EGM_StreamMotion"])
         self.assertEqual([module.module_type for module in modules], ["SysMod", "ProgMod"])
 
+    def test_reads_module_source_without_changing_text(self) -> None:
+        source_text = "MODULE TestModule\n    ! keep whitespace\nENDMODULE\n"
+        payload = {
+            "state": [
+                {
+                    "_type": "rap-module-text",
+                    "change-count": " 421455 ",
+                    "module-text": source_text,
+                    "module-length": "52",
+                }
+            ]
+        }
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            self.assertEqual(
+                request.url.path,
+                "/rw/rapid/tasks/T_ROB1/modules/TestModule/text",
+            )
+            return httpx.Response(200, json=payload)
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            module = RapidService(client).get_module_source("T_ROB1", "TestModule")
+
+        self.assertEqual(module.source, source_text)
+        self.assertEqual(module.change_count, 421455)
+        self.assertEqual(module.reported_length, 52)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from omnicorectl.errors import ProtocolError
-from omnicorectl.rws.hal import first_state, required_text, state_resources
+from omnicorectl.rws.hal import first_state, required_int, required_text, state_resources
 
 
 class HalParserTests(unittest.TestCase):
@@ -23,6 +23,9 @@ class HalParserTests(unittest.TestCase):
 
     def test_state_resources_allows_empty_list(self) -> None:
         self.assertEqual(state_resources({"state": []}, resource="test"), [])
+
+    def test_required_int_strips_controller_whitespace(self) -> None:
+        self.assertEqual(required_int({"count": " 421455 "}, "count", resource="test"), 421455)
 
 
 if __name__ == "__main__":

@@ -11,11 +11,12 @@ from omnicorectl.cli import (
     _format_modules,
     _format_status,
     _format_tasks,
+    _write_source,
     build_parser,
     main,
 )
 from omnicorectl.services.controller import ControllerStatus
-from omnicorectl.services.rapid import RapidModule, RapidTask
+from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
 
 
 STATUS = ControllerStatus(
@@ -83,6 +84,18 @@ class CliTests(unittest.TestCase):
         data = json.loads(_format_modules(modules, as_json=True))
         self.assertEqual(data[0]["task"], "T_ROB1")
         self.assertEqual(data[1]["module_type"], "ProgMod")
+
+    def test_rapid_source_is_written_verbatim(self) -> None:
+        module = ModuleSource("T_ROB1", "Test", 7, 20, "MODULE Test\nENDMODULE\n")
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            _write_source(module, as_json=False)
+        self.assertEqual(stdout.getvalue(), module.source)
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            _write_source(module, as_json=True)
+        self.assertEqual(json.loads(stdout.getvalue())["change_count"], 7)
 
 
 if __name__ == "__main__":

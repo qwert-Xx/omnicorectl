@@ -30,6 +30,10 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 
 # List program and system modules in a task.
 .venv/bin/omnicorectl --insecure rapid modules T_ROB1
+
+# Read module source without modifying the controller.
+.venv/bin/omnicorectl --insecure rapid read T_ROB1 EGM_StreamMotion
+.venv/bin/omnicorectl --insecure rapid read T_ROB1 EGM_StreamMotion > EGM_StreamMotion.mod
 ```
 
 Global connection options must precede the command group. `--host` and

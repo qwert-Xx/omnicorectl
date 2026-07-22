@@ -63,3 +63,13 @@ def required_bool(state: dict[str, Any], key: str, *, resource: str) -> bool:
     if value in {"false", "off", "0"}:
         return False
     raise ProtocolError(f"{resource}: invalid boolean field {key!r}: {value!r}")
+
+
+def required_int(state: dict[str, Any], key: str, *, resource: str) -> int:
+    value = state.get(key)
+    if isinstance(value, bool):
+        raise ProtocolError(f"{resource}: invalid integer field {key!r}")
+    try:
+        return int(value.strip() if isinstance(value, str) else value)
+    except (TypeError, ValueError) as exc:
+        raise ProtocolError(f"{resource}: invalid integer field {key!r}") from exc
