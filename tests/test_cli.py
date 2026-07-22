@@ -7,8 +7,9 @@ import os
 import unittest
 from unittest.mock import patch
 
-from omnicorectl.cli import _format_status, build_parser, main
+from omnicorectl.cli import _format_status, _format_tasks, build_parser, main
 from omnicorectl.services.controller import ControllerStatus
+from omnicorectl.services.rapid import RapidTask
 
 
 STATUS = ControllerStatus(
@@ -55,6 +56,16 @@ class CliTests(unittest.TestCase):
                     ["--timeout", "0", "controller", "status"]
                 )
         self.assertEqual(raised.exception.code, 2)
+
+    def test_rapid_tasks_table_and_json(self) -> None:
+        task = RapidTask("T_ROB1", "normal", "loaded", "ready", True, True)
+        table = _format_tasks([task], as_json=False)
+        self.assertIn("NAME", table)
+        self.assertIn("T_ROB1", table)
+        self.assertIn("yes", table)
+        data = json.loads(_format_tasks([task], as_json=True))
+        self.assertEqual(data[0]["name"], "T_ROB1")
+        self.assertTrue(data[0]["motion_task"])
 
 
 if __name__ == "__main__":

@@ -29,3 +29,27 @@ def required_text(state: dict[str, Any], key: str, *, resource: str) -> str:
         raise ProtocolError(f"{resource}: missing text field {key!r}")
     return value
 
+
+def embedded_resources(payload: Any, *, resource: str) -> list[dict[str, Any]]:
+    """Return object entries from an RWS HAL ``_embedded.resources`` list."""
+
+    if not isinstance(payload, dict):
+        raise ProtocolError(f"{resource}: expected a JSON object")
+    embedded = payload.get("_embedded")
+    if not isinstance(embedded, dict):
+        raise ProtocolError(f"{resource}: response has no embedded resources")
+    resources = embedded.get("resources")
+    if not isinstance(resources, list):
+        raise ProtocolError(f"{resource}: embedded resources is not a list")
+    if not all(isinstance(item, dict) for item in resources):
+        raise ProtocolError(f"{resource}: embedded resource is not an object")
+    return resources
+
+
+def required_bool(state: dict[str, Any], key: str, *, resource: str) -> bool:
+    value = required_text(state, key, resource=resource).strip().lower()
+    if value in {"true", "on", "1"}:
+        return True
+    if value in {"false", "off", "0"}:
+        return False
+    raise ProtocolError(f"{resource}: invalid boolean field {key!r}: {value!r}")

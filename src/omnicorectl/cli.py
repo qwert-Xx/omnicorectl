@@ -20,6 +20,7 @@ from omnicorectl.errors import (
 )
 from omnicorectl.rws import RwsClient
 from omnicorectl.services.controller import ControllerService, ControllerStatus
+from omnicorectl.services.rapid import RapidService, RapidTask
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -47,6 +48,11 @@ def build_parser() -> argparse.ArgumentParser:
     controller_commands = controller.add_subparsers(dest="command", required=True)
     status = controller_commands.add_parser("status", help="show current controller status")
     status.add_argument("--json", action="store_true", dest="as_json")
+
+    rapid = groups.add_parser("rapid", help="RAPID program information")
+    rapid_commands = rapid.add_subparsers(dest="command", required=True)
+    tasks = rapid_commands.add_parser("tasks", help="list RAPID tasks")
+    tasks.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -68,6 +74,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if (args.group, args.command) == ("controller", "status"):
                 status = ControllerService(client).status()
                 print(_format_status(status, as_json=args.as_json))
+                return 0
+            if (args.group, args.command) == ("rapid", "tasks"):
+                tasks = RapidService(client).list_tasks()
+                print(_format_tasks(tasks, as_json=args.as_json))
                 return 0
         raise ConfigurationError("unsupported command")
     except ConfigurationError as exc:
@@ -97,6 +107,35 @@ def _format_status(status: ControllerStatus, *, as_json: bool) -> str:
             f"Execution cycle:   {status.execution_cycle}",
         )
     )
+
+
+def _format_tasks(tasks: list[RapidTask], *, as_json: bool) -> str:
+    if as_json:
+        return json.dumps([asdict(task) for task in tasks], indent=2, ensure_ascii=False)
+    if not tasks:
+        return "No RAPID tasks found."
+
+    headings = ("NAME", "TYPE", "TASK STATE", "EXEC STATE", "ACTIVE", "MOTION")
+    rows = [
+        (
+            task.name,
+            task.task_type,
+            task.task_state,
+            task.execution_state,
+            "yes" if task.active else "no",
+            "yes" if task.motion_task else "no",
+        )
+        for task in tasks
+    ]
+    widths = [
+        max(len(headings[index]), *(len(row[index]) for row in rows))
+        for index in range(len(headings))
+    ]
+
+    def format_row(row: tuple[str, ...]) -> str:
+        return "  ".join(value.ljust(widths[index]) for index, value in enumerate(row))
+
+    return "\n".join((format_row(headings), format_row(tuple("-" * n for n in widths)), *(format_row(row) for row in rows)))
 
 
 def _password() -> str:

@@ -23,6 +23,10 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 # Factory OmniCore certificates are normally self-signed.
 .venv/bin/omnicorectl --insecure controller status
 .venv/bin/omnicorectl --insecure controller status --json
+
+# List RAPID tasks without changing execution state.
+.venv/bin/omnicorectl --insecure rapid tasks
+.venv/bin/omnicorectl --insecure rapid tasks --json
 ```
 
 Global connection options must precede the command group. `--host` and
