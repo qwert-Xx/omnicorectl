@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from omnicorectl.cli import build_parser, main
 from omnicorectl.output import (
+    format_backup_result,
     format_backup_status,
     format_cfg_domains,
     format_cfg_instance,
@@ -30,7 +31,7 @@ from omnicorectl.output import (
 )
 from omnicorectl.services.controller import ControllerStatus
 from omnicorectl.services.control_station import WriteAccessStatus
-from omnicorectl.services.backup import BackupStatus
+from omnicorectl.services.backup import BackupResult, BackupStatus
 from omnicorectl.services.files import (
     DeleteResult,
     DownloadResult,
@@ -74,6 +75,22 @@ class CliTests(unittest.TestCase):
             {"state": "Backup Ready"},
         )
 
+    def test_backup_result_text_and_json(self) -> None:
+        result = BackupResult(
+            destination="/$TEMP/nightly",
+            artifact_path="/$TEMP/nightly.tar",
+            archive=True,
+            progress_uri="/progress/7",
+            state="ready",
+            code="294912",
+            resource_path="/fileservice/$TEMP/nightly",
+        )
+        text = format_backup_result(result, as_json=False)
+        self.assertIn("Backup ready (archive)", text)
+        self.assertIn("294912", text)
+        data = json.loads(format_backup_result(result, as_json=True))
+        self.assertEqual(data["progress_uri"], "/progress/7")
+
     def test_status_json_has_stable_machine_keys(self) -> None:
         output = json.loads(format_status(STATUS, as_json=True))
         self.assertEqual(output["controller_id"], "460-300278")
@@ -105,6 +122,15 @@ class CliTests(unittest.TestCase):
                     ["--timeout", "0", "controller", "status"]
                 )
         self.assertEqual(raised.exception.code, 2)
+
+    def test_backup_create_uses_safe_defaults(self) -> None:
+        args = build_parser().parse_args(
+            ["backup", "create", "$TEMP/nightly"]
+        )
+        self.assertTrue(args.archive)
+        self.assertFalse(args.force)
+        self.assertFalse(args.allow_running)
+        self.assertEqual(args.wait_timeout, 300.0)
 
     def test_rapid_tasks_table_and_json(self) -> None:
         task = RapidTask("T_ROB1", "normal", "loaded", "ready", True, True)

@@ -20,6 +20,7 @@ from omnicorectl.errors import (
     ProtocolError,
 )
 from omnicorectl.output import (
+    format_backup_result,
     format_backup_status,
     format_cfg_domains,
     format_cfg_instance,
@@ -189,6 +190,37 @@ def _add_backup_commands(groups: argparse._SubParsersAction) -> None:
     commands = backup.add_subparsers(dest="command", required=True)
     status = commands.add_parser("status", help="show controller backup state")
     status.add_argument("--json", action="store_true", dest="as_json")
+    create = commands.add_parser("create", help="create and wait for a backup")
+    create.add_argument("destination", help="controller path, for example $TEMP/name")
+    create.add_argument(
+        "--directory",
+        action="store_false",
+        dest="archive",
+        help="create a directory backup instead of the default tar archive",
+    )
+    create.add_argument(
+        "--force",
+        action="store_true",
+        help="allow the controller to replace an existing destination",
+    )
+    create.add_argument(
+        "--allow-running",
+        action="store_true",
+        help="allow backup while RAPID is not stopped",
+    )
+    create.add_argument(
+        "--wait-timeout",
+        type=_positive_float,
+        default=300.0,
+        metavar="SECONDS",
+    )
+    create.add_argument(
+        "--poll-interval",
+        type=_positive_float,
+        default=1.0,
+        metavar="SECONDS",
+    )
+    create.add_argument("--json", action="store_true", dest="as_json")
 
 
 def _add_control_station_commands(groups: argparse._SubParsersAction) -> None:
@@ -302,6 +334,23 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
         print(format_delete_result(result, as_json=args.as_json))
     elif command == ("backup", "status"):
         print(format_backup_status(BackupService(client).status(), as_json=args.as_json))
+    elif command == ("backup", "create"):
+        if not args.allow_running:
+            rapid_state = ControllerService(client).status().rapid_execution
+            if rapid_state.lower() != "stopped":
+                raise ConfigurationError(
+                    "RAPID is not stopped; stop it or explicitly use --allow-running"
+                )
+        station = _remote_control_station(args)
+        with ControlStationService(client).write_access(station):
+            result = BackupService(client).create(
+                args.destination,
+                archive=args.archive,
+                overwrite=args.force,
+                timeout=args.wait_timeout,
+                poll_interval=args.poll_interval,
+            )
+        print(format_backup_result(result, as_json=args.as_json))
     elif command == ("controlstation", "status"):
         status = ControlStationService(client).status()
         print(format_write_access_status(status, as_json=args.as_json))

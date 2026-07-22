@@ -74,6 +74,10 @@ export OMNICORE_CONTROL_STATION_PIN='set-a-numeric-pin'
 # Read the controller backup engine state.
 .venv/bin/omnicorectl --insecure backup status
 
+# Create a tar backup, poll its progress, and release write access afterward.
+# The safe default refuses if RAPID is running or the destination already exists.
+.venv/bin/omnicorectl --insecure backup create '$TEMP/backup_20260722'
+
 # Inspect RW8 external-control and write-access state.
 .venv/bin/omnicorectl --insecure controlstation status
 ```

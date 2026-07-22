@@ -6,7 +6,7 @@ import json
 import sys
 from dataclasses import asdict
 
-from omnicorectl.services.backup import BackupStatus
+from omnicorectl.services.backup import BackupResult, BackupStatus
 from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgType
 from omnicorectl.services.controller import ControllerStatus
 from omnicorectl.services.control_station import WriteAccessStatus
@@ -244,6 +244,16 @@ def format_backup_status(status: BackupStatus, *, as_json: bool) -> str:
     if as_json:
         return _json_object(status)
     return f"Backup state: {status.state}"
+
+
+def format_backup_result(result: BackupResult, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(result)
+    kind = "archive" if result.archive else "directory"
+    return (
+        f"Backup ready ({kind}): {result.artifact_path} "
+        f"[code {result.code}, progress {result.progress_uri}]"
+    )
 
 
 def format_write_access_status(status: WriteAccessStatus, *, as_json: bool) -> str:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Iterator
 from typing import Any, BinaryIO
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -103,6 +104,33 @@ class RwsClient:
             data=data or {},
             headers={"Content-Type": FORM_V2},
         )
+
+    def post_form_location(self, path: str, data: dict[str, str]) -> str:
+        """Start an asynchronous form action and return its progress URI."""
+
+        response = self._request(
+            "POST",
+            path,
+            data=data,
+            headers={"Content-Type": FORM_V2},
+        )
+        if response.status_code != 202:
+            raise ProtocolError(
+                f"{path}: expected HTTP 202 for asynchronous operation, "
+                f"got {response.status_code}"
+            )
+        location = response.headers.get("Location")
+        if not location:
+            raise ProtocolError(f"{path}: asynchronous response has no Location header")
+        parsed = urlsplit(location)
+        progress_uri = parsed.path
+        if parsed.query:
+            progress_uri = f"{progress_uri}?{parsed.query}"
+        if not progress_uri.startswith("/progress/"):
+            raise ProtocolError(
+                f"{path}: unexpected asynchronous Location {location!r}"
+            )
+        return progress_uri
 
     def download(self, path: str, destination: BinaryIO) -> int:
         """Stream a controller resource to an already-open binary destination."""
