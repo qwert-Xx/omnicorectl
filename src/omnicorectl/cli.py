@@ -22,6 +22,7 @@ from omnicorectl.output import (
     format_cfg_instances,
     format_cfg_types,
     format_devices,
+    format_file_entries,
     format_modules,
     format_networks,
     format_signal_details,
@@ -33,6 +34,7 @@ from omnicorectl.output import (
 from omnicorectl.rws import RwsClient
 from omnicorectl.services.cfg import CfgService
 from omnicorectl.services.controller import ControllerService
+from omnicorectl.services.files import FileService
 from omnicorectl.services.io import IoService
 from omnicorectl.services.rapid import RapidService
 
@@ -62,6 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_rapid_commands(groups)
     _add_io_commands(groups)
     _add_cfg_commands(groups)
+    _add_file_commands(groups)
     return parser
 
 
@@ -128,6 +131,14 @@ def _add_cfg_commands(groups: argparse._SubParsersAction) -> None:
     cfg_get.add_argument("cfg_type")
     cfg_get.add_argument("instance")
     cfg_get.add_argument("--json", action="store_true", dest="as_json")
+
+
+def _add_file_commands(groups: argparse._SubParsersAction) -> None:
+    files = groups.add_parser("file", help="controller file service")
+    commands = files.add_subparsers(dest="command", required=True)
+    list_command = commands.add_parser("list", aliases=["ls"], help="list a directory")
+    list_command.add_argument("path", nargs="?", default="/")
+    list_command.add_argument("--json", action="store_true", dest="as_json")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -206,6 +217,9 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
             args.domain, args.cfg_type, args.instance
         )
         print(format_cfg_instance(instance, as_json=args.as_json))
+    elif args.group == "file" and args.command in {"list", "ls"}:
+        entries = FileService(client).list_directory(args.path)
+        print(format_file_entries(entries, as_json=args.as_json))
     else:
         raise ConfigurationError("unsupported command")
     return 0

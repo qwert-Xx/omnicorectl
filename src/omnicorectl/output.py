@@ -8,6 +8,7 @@ from dataclasses import asdict
 
 from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgType
 from omnicorectl.services.controller import ControllerStatus
+from omnicorectl.services.files import FileEntry
 from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal, IoSignalDetails
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
 
@@ -192,6 +193,26 @@ def format_cfg_instance(instance: CfgInstance, *, as_json: bool) -> str:
             for key, value in instance.attributes.items()
         )
     return "\n".join(lines)
+
+
+def format_file_entries(entries: list[FileEntry], *, as_json: bool) -> str:
+    if as_json:
+        return _json_list(entries)
+    if not entries:
+        return "Directory is empty."
+    return _format_table(
+        ("TYPE", "SIZE", "READ ONLY", "MODIFIED", "NAME"),
+        [
+            (
+                "dir" if entry.is_directory else "file",
+                "-" if entry.size is None else str(entry.size),
+                _yes_no(entry.read_only),
+                entry.modified,
+                entry.name,
+            )
+            for entry in entries
+        ],
+    )
 
 
 def _format_table(headings: tuple[str, ...], rows: list[tuple[str, ...]]) -> str:

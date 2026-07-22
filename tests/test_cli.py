@@ -14,6 +14,7 @@ from omnicorectl.output import (
     format_cfg_instances,
     format_cfg_types,
     format_devices,
+    format_file_entries,
     format_modules,
     format_networks,
     format_signal_details,
@@ -23,6 +24,7 @@ from omnicorectl.output import (
     write_source,
 )
 from omnicorectl.services.controller import ControllerStatus
+from omnicorectl.services.files import FileEntry
 from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgType
 from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal, IoSignalDetails
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
@@ -201,6 +203,26 @@ class CliTests(unittest.TestCase):
         self.assertIn("OutputSize  64", text)
         data = json.loads(format_cfg_instance(instance, as_json=True))
         self.assertEqual(data["instance_id"], "42")
+
+    def test_file_entries_table_and_json(self) -> None:
+        entries = [
+            FileEntry(
+                "/$HOME/Dashboard.xml",
+                "Dashboard.xml",
+                False,
+                6349,
+                False,
+                "created",
+                "modified",
+            ),
+            FileEntry("/$HOME/Code", "Code", True, None, False, "created", "modified"),
+        ]
+        table = format_file_entries(entries, as_json=False)
+        self.assertIn("Dashboard.xml", table)
+        self.assertIn("dir", table)
+        data = json.loads(format_file_entries(entries, as_json=True))
+        self.assertEqual(data[0]["size"], 6349)
+        self.assertTrue(data[1]["is_directory"])
 
 
 if __name__ == "__main__":
