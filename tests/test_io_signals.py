@@ -98,6 +98,51 @@ class IoSignalsTests(unittest.TestCase):
 
         self.assertEqual(signals, [])
 
+    def test_gets_detailed_signal_state(self) -> None:
+        payload = {
+            "_embedded": {
+                "resources": [
+                    {
+                        "_type": "ios-signal-li",
+                        "_title": "Network/Device/Signal",
+                        "name": "Signal",
+                        "type": "DI",
+                        "category": "internal",
+                        "lvalue": "1",
+                        "lstate": "not simulated",
+                        "pvalue": "1",
+                        "phstate": "valid",
+                        "quality": "good",
+                        "access-level": "Internal/Read-only",
+                        "write-access": "None",
+                        "safe-level": "N/A",
+                    }
+                ]
+            }
+        }
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            self.assertEqual(
+                request.url.path, "/rw/iosystem/signals/Network/Device/Signal"
+            )
+            return httpx.Response(200, json=payload)
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            details = IoService(client).get_signal("Network", "Device", "Signal")
+
+        self.assertEqual(details.logical_value, "1")
+        self.assertEqual(details.physical_state, "valid")
+        self.assertEqual(details.quality, "good")
+        self.assertEqual(details.write_access, "None")
+
 
 if __name__ == "__main__":
     unittest.main()

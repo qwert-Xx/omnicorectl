@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from urllib.parse import quote
 
 from omnicorectl.errors import ProtocolError
 from omnicorectl.rws.client import RwsClient
@@ -34,6 +35,23 @@ class IoSignal:
     category: str
     value: str
     state: str
+
+
+@dataclass(frozen=True, slots=True)
+class IoSignalDetails:
+    network: str
+    device: str
+    name: str
+    signal_type: str
+    category: str
+    logical_value: str
+    logical_state: str
+    physical_value: str
+    physical_state: str
+    quality: str
+    access_level: str
+    write_access: str
+    safety_level: str
 
 
 class IoService:
@@ -156,3 +174,36 @@ class IoService:
             if not has_next_link(payload, resource="I/O signals"):
                 return signals
             start += page_size
+
+    def get_signal(self, network: str, device: str, name: str) -> IoSignalDetails:
+        path = "/rw/iosystem/signals/{}/{}/{}".format(
+            quote(network, safe=""), quote(device, safe=""), quote(name, safe="")
+        )
+        resources = embedded_resources(
+            self._client.get_json(path), resource=f"I/O signal {network}/{device}/{name}"
+        )
+        matches = [item for item in resources if item.get("_type") == "ios-signal-li"]
+        if not matches:
+            raise ProtocolError(
+                f"I/O signal {network}/{device}/{name}: response has no signal resource"
+            )
+        item = matches[0]
+        return IoSignalDetails(
+            network=network,
+            device=device,
+            name=required_text(item, "name", resource="I/O signal"),
+            signal_type=required_text(item, "type", resource="I/O signal"),
+            category=required_text(item, "category", resource="I/O signal"),
+            logical_value=required_text(item, "lvalue", resource="I/O signal"),
+            logical_state=required_text(item, "lstate", resource="I/O signal"),
+            physical_value=required_text(item, "pvalue", resource="I/O signal"),
+            physical_state=required_text(item, "phstate", resource="I/O signal"),
+            quality=required_text(item, "quality", resource="I/O signal"),
+            access_level=required_text(
+                item, "access-level", resource="I/O signal"
+            ),
+            write_access=required_text(
+                item, "write-access", resource="I/O signal"
+            ),
+            safety_level=required_text(item, "safe-level", resource="I/O signal"),
+        )

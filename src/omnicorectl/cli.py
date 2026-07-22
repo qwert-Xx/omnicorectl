@@ -20,7 +20,13 @@ from omnicorectl.errors import (
 )
 from omnicorectl.rws import RwsClient
 from omnicorectl.services.controller import ControllerService, ControllerStatus
-from omnicorectl.services.io import IoDevice, IoNetwork, IoService, IoSignal
+from omnicorectl.services.io import (
+    IoDevice,
+    IoNetwork,
+    IoService,
+    IoSignal,
+    IoSignalDetails,
+)
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidService, RapidTask
 
 
@@ -75,6 +81,11 @@ def build_parser() -> argparse.ArgumentParser:
     signals.add_argument("--type", dest="signal_type", choices=("DI", "DO", "AI", "AO", "GI", "GO"))
     signals.add_argument("--name")
     signals.add_argument("--json", action="store_true", dest="as_json")
+    io_get = io_commands.add_parser("get", help="read one I/O signal")
+    io_get.add_argument("network")
+    io_get.add_argument("device")
+    io_get.add_argument("name")
+    io_get.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -125,6 +136,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     name=args.name,
                 )
                 print(_format_signals(signals, as_json=args.as_json))
+                return 0
+            if (args.group, args.command) == ("io", "get"):
+                signal = IoService(client).get_signal(
+                    args.network, args.device, args.name
+                )
+                print(_format_signal_details(signal, as_json=args.as_json))
                 return 0
         raise ConfigurationError("unsupported command")
     except ConfigurationError as exc:
@@ -297,6 +314,26 @@ def _format_signals(signals: list[IoSignal], *, as_json: bool) -> str:
     separator = tuple("-" * width for width in widths)
     return "\n".join(
         (format_row(headings), format_row(separator), *(format_row(row) for row in rows))
+    )
+
+
+def _format_signal_details(signal: IoSignalDetails, *, as_json: bool) -> str:
+    if as_json:
+        return json.dumps(asdict(signal), indent=2, ensure_ascii=False)
+    return "\n".join(
+        (
+            f"Signal:          {signal.network}/{signal.device}/{signal.name}",
+            f"Type:            {signal.signal_type}",
+            f"Category:        {signal.category}",
+            f"Logical value:   {signal.logical_value}",
+            f"Logical state:   {signal.logical_state}",
+            f"Physical value:  {signal.physical_value}",
+            f"Physical state:  {signal.physical_state}",
+            f"Quality:         {signal.quality}",
+            f"Access level:    {signal.access_level}",
+            f"Write access:    {signal.write_access}",
+            f"Safety level:    {signal.safety_level}",
+        )
     )
 
 

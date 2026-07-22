@@ -12,6 +12,7 @@ from omnicorectl.cli import (
     _format_devices,
     _format_networks,
     _format_signals,
+    _format_signal_details,
     _format_status,
     _format_tasks,
     _write_source,
@@ -19,7 +20,7 @@ from omnicorectl.cli import (
     main,
 )
 from omnicorectl.services.controller import ControllerStatus
-from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal
+from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal, IoSignalDetails
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
 
 
@@ -136,6 +137,28 @@ class CliTests(unittest.TestCase):
         data = json.loads(_format_signals(signals, as_json=True))
         self.assertEqual(data[0]["signal_type"], "DI")
         self.assertEqual(data[0]["value"], "1")
+
+    def test_io_signal_details_text_and_json(self) -> None:
+        signal = IoSignalDetails(
+            "Network",
+            "Device",
+            "Signal",
+            "DI",
+            "internal",
+            "1",
+            "not simulated",
+            "1",
+            "valid",
+            "good",
+            "Internal/Read-only",
+            "None",
+            "N/A",
+        )
+        text = _format_signal_details(signal, as_json=False)
+        self.assertIn("Network/Device/Signal", text)
+        self.assertIn("Quality:         good", text)
+        data = json.loads(_format_signal_details(signal, as_json=True))
+        self.assertEqual(data["physical_value"], "1")
 
 
 if __name__ == "__main__":

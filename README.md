@@ -45,6 +45,9 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 .venv/bin/omnicorectl --insecure io signals
 .venv/bin/omnicorectl --insecure io signals --network EtherCAT --device EC_Internal_Device
 .venv/bin/omnicorectl --insecure io signals --type DI --json
+
+# Read logical/physical state and access metadata for one signal.
+.venv/bin/omnicorectl --insecure io get SC_Feedback_Net SC_Feedback_Dev SafetyEnable
 ```
 
 Global connection options must precede the command group. `--host` and
