@@ -20,6 +20,7 @@ from omnicorectl.errors import (
 )
 from omnicorectl.rws import RwsClient
 from omnicorectl.services.controller import ControllerService, ControllerStatus
+from omnicorectl.services.io import IoNetwork, IoService
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidService, RapidTask
 
 
@@ -60,6 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
     read.add_argument("task", help="RAPID task name, for example T_ROB1")
     read.add_argument("module", help="RAPID module name")
     read.add_argument("--json", action="store_true", dest="as_json")
+
+    io_group = groups.add_parser("io", help="I/O system information")
+    io_commands = io_group.add_subparsers(dest="command", required=True)
+    networks = io_commands.add_parser("networks", help="list I/O networks")
+    networks.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -93,6 +99,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if (args.group, args.command) == ("rapid", "read"):
                 source = RapidService(client).get_module_source(args.task, args.module)
                 _write_source(source, as_json=args.as_json)
+                return 0
+            if (args.group, args.command) == ("io", "networks"):
+                networks = IoService(client).list_networks()
+                print(_format_networks(networks, as_json=args.as_json))
                 return 0
         raise ConfigurationError("unsupported command")
     except ConfigurationError as exc:
@@ -176,6 +186,32 @@ def _write_source(module: ModuleSource, *, as_json: bool) -> None:
     sys.stdout.write(module.source)
     if not module.source.endswith("\n"):
         sys.stdout.write("\n")
+
+
+def _format_networks(networks: list[IoNetwork], *, as_json: bool) -> str:
+    if as_json:
+        return json.dumps(
+            [asdict(network) for network in networks], indent=2, ensure_ascii=False
+        )
+    if not networks:
+        return "No I/O networks found."
+    headings = ("NAME", "PHYSICAL STATE", "LOGICAL STATE")
+    rows = [
+        (network.name, network.physical_state, network.logical_state)
+        for network in networks
+    ]
+    widths = [
+        max(len(headings[index]), *(len(row[index]) for row in rows))
+        for index in range(len(headings))
+    ]
+
+    def format_row(row: tuple[str, ...]) -> str:
+        return "  ".join(value.ljust(widths[index]) for index, value in enumerate(row))
+
+    separator = tuple("-" * width for width in widths)
+    return "\n".join(
+        (format_row(headings), format_row(separator), *(format_row(row) for row in rows))
+    )
 
 
 def _password() -> str:

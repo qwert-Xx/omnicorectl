@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from omnicorectl.cli import (
     _format_modules,
+    _format_networks,
     _format_status,
     _format_tasks,
     _write_source,
@@ -16,6 +17,7 @@ from omnicorectl.cli import (
     main,
 )
 from omnicorectl.services.controller import ControllerStatus
+from omnicorectl.services.io import IoNetwork
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
 
 
@@ -96,6 +98,14 @@ class CliTests(unittest.TestCase):
         with contextlib.redirect_stdout(stdout):
             _write_source(module, as_json=True)
         self.assertEqual(json.loads(stdout.getvalue())["change_count"], 7)
+
+    def test_io_networks_table_and_json(self) -> None:
+        networks = [IoNetwork("EtherCAT", "running", "started")]
+        table = _format_networks(networks, as_json=False)
+        self.assertIn("PHYSICAL STATE", table)
+        self.assertIn("EtherCAT", table)
+        data = json.loads(_format_networks(networks, as_json=True))
+        self.assertEqual(data[0]["logical_state"], "started")
 
 
 if __name__ == "__main__":

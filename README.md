@@ -34,6 +34,9 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 # Read module source without modifying the controller.
 .venv/bin/omnicorectl --insecure rapid read T_ROB1 EGM_StreamMotion
 .venv/bin/omnicorectl --insecure rapid read T_ROB1 EGM_StreamMotion > EGM_StreamMotion.mod
+
+# List configured I/O networks.
+.venv/bin/omnicorectl --insecure io networks
 ```
 
 Global connection options must precede the command group. `--host` and
