@@ -14,13 +14,23 @@ def first_state(payload: Any, *, resource: str) -> dict[str, Any]:
     keys survive parsing, while the minimum shape used by a service is checked.
     """
 
-    if not isinstance(payload, dict):
-        raise ProtocolError(f"{resource}: expected a JSON object")
-
-    state = payload.get("state")
-    if not isinstance(state, list) or not state or not isinstance(state[0], dict):
+    state = state_resources(payload, resource=resource)
+    if not state:
         raise ProtocolError(f"{resource}: response has no state resource")
     return state[0]
+
+
+def state_resources(payload: Any, *, resource: str) -> list[dict[str, Any]]:
+    """Return object entries from an RWS top-level ``state`` list."""
+
+    if not isinstance(payload, dict):
+        raise ProtocolError(f"{resource}: expected a JSON object")
+    state = payload.get("state")
+    if not isinstance(state, list):
+        raise ProtocolError(f"{resource}: response state is not a list")
+    if not all(isinstance(item, dict) for item in state):
+        raise ProtocolError(f"{resource}: state resource is not an object")
+    return state
 
 
 def required_text(state: dict[str, Any], key: str, *, resource: str) -> str:

@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from urllib.parse import quote
 
 from omnicorectl.rws.client import RwsClient
-from omnicorectl.rws.hal import embedded_resources, required_bool, required_text
+from omnicorectl.rws.hal import (
+    embedded_resources,
+    required_bool,
+    required_text,
+    state_resources,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +22,13 @@ class RapidTask:
     execution_state: str
     active: bool
     motion_task: bool
+
+
+@dataclass(frozen=True, slots=True)
+class RapidModule:
+    task: str
+    name: str
+    module_type: str
 
 
 class RapidService:
@@ -47,3 +60,24 @@ class RapidService:
                 )
             )
         return tasks
+
+    def list_modules(self, task: str) -> list[RapidModule]:
+        task_path = quote(task, safe="")
+        resources = state_resources(
+            self._client.get_json(f"/rw/rapid/tasks/{task_path}/modules"),
+            resource=f"RAPID modules for {task}",
+        )
+        modules = []
+        for item in resources:
+            if item.get("_type") != "rap-module-info-li":
+                continue
+            modules.append(
+                RapidModule(
+                    task=task,
+                    name=required_text(item, "name", resource="RAPID module"),
+                    module_type=required_text(
+                        item, "type", resource="RAPID module"
+                    ),
+                )
+            )
+        return modules

@@ -27,6 +27,9 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 # List RAPID tasks without changing execution state.
 .venv/bin/omnicorectl --insecure rapid tasks
 .venv/bin/omnicorectl --insecure rapid tasks --json
+
+# List program and system modules in a task.
+.venv/bin/omnicorectl --insecure rapid modules T_ROB1
 ```
 
 Global connection options must precede the command group. `--host` and

@@ -7,9 +7,15 @@ import os
 import unittest
 from unittest.mock import patch
 
-from omnicorectl.cli import _format_status, _format_tasks, build_parser, main
+from omnicorectl.cli import (
+    _format_modules,
+    _format_status,
+    _format_tasks,
+    build_parser,
+    main,
+)
 from omnicorectl.services.controller import ControllerStatus
-from omnicorectl.services.rapid import RapidTask
+from omnicorectl.services.rapid import RapidModule, RapidTask
 
 
 STATUS = ControllerStatus(
@@ -66,6 +72,17 @@ class CliTests(unittest.TestCase):
         data = json.loads(_format_tasks([task], as_json=True))
         self.assertEqual(data[0]["name"], "T_ROB1")
         self.assertTrue(data[0]["motion_task"])
+
+    def test_rapid_modules_table_and_json(self) -> None:
+        modules = [
+            RapidModule("T_ROB1", "BASE", "SysMod"),
+            RapidModule("T_ROB1", "EGM_StreamMotion", "ProgMod"),
+        ]
+        table = _format_modules(modules, as_json=False)
+        self.assertIn("EGM_StreamMotion  ProgMod", table)
+        data = json.loads(_format_modules(modules, as_json=True))
+        self.assertEqual(data[0]["task"], "T_ROB1")
+        self.assertEqual(data[1]["module_type"], "ProgMod")
 
 
 if __name__ == "__main__":

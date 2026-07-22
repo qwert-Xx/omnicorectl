@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from omnicorectl.errors import ProtocolError
-from omnicorectl.rws.hal import first_state, required_text
+from omnicorectl.rws.hal import first_state, required_text, state_resources
 
 
 class HalParserTests(unittest.TestCase):
@@ -14,14 +14,16 @@ class HalParserTests(unittest.TestCase):
         self.assertEqual(state["name"], "robot")
 
     def test_first_state_rejects_missing_collection(self) -> None:
-        with self.assertRaisesRegex(ProtocolError, "no state resource"):
+        with self.assertRaisesRegex(ProtocolError, "state is not a list"):
             first_state({}, resource="test")
 
     def test_required_text_rejects_empty_value(self) -> None:
         with self.assertRaisesRegex(ProtocolError, "missing text field"):
             required_text({"name": ""}, "name", resource="test")
 
+    def test_state_resources_allows_empty_list(self) -> None:
+        self.assertEqual(state_resources({"state": []}, resource="test"), [])
+
 
 if __name__ == "__main__":
     unittest.main()
-

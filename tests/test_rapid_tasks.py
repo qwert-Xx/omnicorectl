@@ -66,6 +66,36 @@ class RapidTasksTests(unittest.TestCase):
         self.addCleanup(client.close)
         self.assertEqual(RapidService(client).list_tasks(), [])
 
+    def test_lists_program_and_system_modules(self) -> None:
+        payload = {
+            "state": [
+                {"_type": "rap-module-info-li", "name": "BASE", "type": "SysMod"},
+                {
+                    "_type": "rap-module-info-li",
+                    "name": "EGM_StreamMotion",
+                    "type": "ProgMod",
+                },
+            ]
+        }
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            self.assertEqual(request.url.path, "/rw/rapid/tasks/T_ROB1/modules")
+            return httpx.Response(200, json=payload)
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            modules = RapidService(client).list_modules("T_ROB1")
+
+        self.assertEqual([module.name for module in modules], ["BASE", "EGM_StreamMotion"])
+        self.assertEqual([module.module_type for module in modules], ["SysMod", "ProgMod"])
+
 
 if __name__ == "__main__":
     unittest.main()

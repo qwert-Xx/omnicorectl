@@ -20,7 +20,7 @@ from omnicorectl.errors import (
 )
 from omnicorectl.rws import RwsClient
 from omnicorectl.services.controller import ControllerService, ControllerStatus
-from omnicorectl.services.rapid import RapidService, RapidTask
+from omnicorectl.services.rapid import RapidModule, RapidService, RapidTask
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -53,6 +53,9 @@ def build_parser() -> argparse.ArgumentParser:
     rapid_commands = rapid.add_subparsers(dest="command", required=True)
     tasks = rapid_commands.add_parser("tasks", help="list RAPID tasks")
     tasks.add_argument("--json", action="store_true", dest="as_json")
+    modules = rapid_commands.add_parser("modules", help="list modules in a RAPID task")
+    modules.add_argument("task", help="RAPID task name, for example T_ROB1")
+    modules.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -78,6 +81,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if (args.group, args.command) == ("rapid", "tasks"):
                 tasks = RapidService(client).list_tasks()
                 print(_format_tasks(tasks, as_json=args.as_json))
+                return 0
+            if (args.group, args.command) == ("rapid", "modules"):
+                modules = RapidService(client).list_modules(args.task)
+                print(_format_modules(modules, as_json=args.as_json))
                 return 0
         raise ConfigurationError("unsupported command")
     except ConfigurationError as exc:
@@ -136,6 +143,22 @@ def _format_tasks(tasks: list[RapidTask], *, as_json: bool) -> str:
         return "  ".join(value.ljust(widths[index]) for index, value in enumerate(row))
 
     return "\n".join((format_row(headings), format_row(tuple("-" * n for n in widths)), *(format_row(row) for row in rows)))
+
+
+def _format_modules(modules: list[RapidModule], *, as_json: bool) -> str:
+    if as_json:
+        return json.dumps(
+            [asdict(module) for module in modules], indent=2, ensure_ascii=False
+        )
+    if not modules:
+        return "No RAPID modules found."
+    name_width = max(len("NAME"), *(len(module.name) for module in modules))
+    lines = [f"{'NAME'.ljust(name_width)}  TYPE", f"{'-' * name_width}  ------"]
+    lines.extend(
+        f"{module.name.ljust(name_width)}  {module.module_type}"
+        for module in modules
+    )
+    return "\n".join(lines)
 
 
 def _password() -> str:
