@@ -147,6 +147,17 @@ class FileServiceTests(unittest.TestCase):
             if request.url.path == "/logout":
                 return httpx.Response(200, json={})
             calls.append(f"{request.method} {request.url.raw_path.decode()}")
+            if request.method == "GET":
+                return httpx.Response(
+                    200,
+                    json={
+                        "_embedded": {
+                            "resources": [
+                                _file_entry("test upload.bin", is_directory=False)
+                            ]
+                        }
+                    },
+                )
             return httpx.Response(204)
 
         with RwsClient(
@@ -160,8 +171,69 @@ class FileServiceTests(unittest.TestCase):
 
         self.assertEqual(result.remote_path, "/$TEMP/test upload.bin")
         self.assertEqual(
-            calls, ["DELETE /fileservice/%24TEMP/test%20upload.bin"]
+            calls,
+            [
+                "GET /fileservice/%24TEMP",
+                "DELETE /fileservice/%24TEMP/test%20upload.bin",
+            ],
         )
+
+    def test_refuses_to_delete_directory(self) -> None:
+        calls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            calls.append(request.method)
+            return httpx.Response(
+                200,
+                json={
+                    "_embedded": {
+                        "resources": [_file_entry("logs", is_directory=True)]
+                    }
+                },
+            )
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            with self.assertRaisesRegex(ConfigurationError, "directory"):
+                FileService(client).delete_file("$TEMP/logs")
+
+        self.assertEqual(calls, ["GET"])
+
+    def test_refuses_to_delete_missing_file(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            return httpx.Response(200, json={"_embedded": {"resources": []}})
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            with self.assertRaisesRegex(ConfigurationError, "does not exist"):
+                FileService(client).delete_file("$TEMP/missing.bin")
+
+
+def _file_entry(name: str, *, is_directory: bool) -> dict[str, object]:
+    entry: dict[str, object] = {
+        "_type": "fs-dir" if is_directory else "fs-file",
+        "_title": name,
+        "fs-readonly": "false",
+        "fs-cdate": "created",
+        "fs-mdate": "modified",
+    }
+    if not is_directory:
+        entry["fs-size"] = "12"
+    return entry
 
 
 if __name__ == "__main__":

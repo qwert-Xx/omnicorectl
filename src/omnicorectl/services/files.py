@@ -1,4 +1,4 @@
-"""Read-only controller file-service resources."""
+"""Controller file-service resources."""
 
 from __future__ import annotations
 
@@ -160,6 +160,18 @@ class FileService:
         normalized, endpoint = _file_endpoint(remote_path)
         if normalized == "/":
             raise ConfigurationError("a remote file path is required for deletion")
+        remote = PurePosixPath(normalized)
+        matches = [
+            entry
+            for entry in self.list_directory(str(remote.parent))
+            if entry.name == remote.name
+        ]
+        if not matches:
+            raise ConfigurationError(f"remote file does not exist: {normalized}")
+        if matches[0].is_directory:
+            raise ConfigurationError(
+                f"refusing to delete a directory with file delete: {normalized}"
+            )
         self._client.delete(endpoint)
         return DeleteResult(remote_path=normalized)
 
