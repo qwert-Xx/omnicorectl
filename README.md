@@ -65,6 +65,9 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 
 # Read the controller backup engine state.
 .venv/bin/omnicorectl --insecure backup status
+
+# Inspect RW8 external-control and write-access state.
+.venv/bin/omnicorectl --insecure controlstation status
 ```
 
 Global connection options must precede the command group. `--host` and

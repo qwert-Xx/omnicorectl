@@ -23,9 +23,11 @@ from omnicorectl.output import (
     format_signals,
     format_status,
     format_tasks,
+    format_write_access_status,
     write_source,
 )
 from omnicorectl.services.controller import ControllerStatus
+from omnicorectl.services.control_station import WriteAccessStatus
 from omnicorectl.services.backup import BackupStatus
 from omnicorectl.services.files import DownloadResult, FileEntry
 from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgType
@@ -46,6 +48,14 @@ STATUS = ControllerStatus(
 
 
 class CliTests(unittest.TestCase):
+    def test_write_access_status_text_and_json(self) -> None:
+        status = WriteAccessStatus(False, True, "none", "none")
+        text = format_write_access_status(status, as_json=False)
+        self.assertIn("Write access held:        no", text)
+        self.assertIn("External control enabled: yes", text)
+        data = json.loads(format_write_access_status(status, as_json=True))
+        self.assertTrue(data["external_control_enabled"])
+
     def test_backup_status_text_and_json(self) -> None:
         status = BackupStatus("Backup Ready")
         self.assertEqual(

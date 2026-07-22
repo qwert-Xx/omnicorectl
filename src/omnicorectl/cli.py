@@ -32,12 +32,14 @@ from omnicorectl.output import (
     format_signals,
     format_status,
     format_tasks,
+    format_write_access_status,
     write_source,
 )
 from omnicorectl.rws import RwsClient
 from omnicorectl.services.backup import BackupService
 from omnicorectl.services.cfg import CfgService
 from omnicorectl.services.controller import ControllerService
+from omnicorectl.services.control_station import ControlStationService
 from omnicorectl.services.files import FileService
 from omnicorectl.services.io import IoService
 from omnicorectl.services.rapid import RapidService
@@ -70,6 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_cfg_commands(groups)
     _add_file_commands(groups)
     _add_backup_commands(groups)
+    _add_control_station_commands(groups)
     return parser
 
 
@@ -155,6 +158,15 @@ def _add_backup_commands(groups: argparse._SubParsersAction) -> None:
     backup = groups.add_parser("backup", help="controller backup operations")
     commands = backup.add_subparsers(dest="command", required=True)
     status = commands.add_parser("status", help="show controller backup state")
+    status.add_argument("--json", action="store_true", dest="as_json")
+
+
+def _add_control_station_commands(groups: argparse._SubParsersAction) -> None:
+    station = groups.add_parser(
+        "controlstation", help="RobotWare 8 Control Station state"
+    )
+    commands = station.add_subparsers(dest="command", required=True)
+    status = commands.add_parser("status", help="show remote write-access state")
     status.add_argument("--json", action="store_true", dest="as_json")
 
 
@@ -244,6 +256,9 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
         print(format_download_result(result, as_json=args.as_json))
     elif command == ("backup", "status"):
         print(format_backup_status(BackupService(client).status(), as_json=args.as_json))
+    elif command == ("controlstation", "status"):
+        status = ControlStationService(client).status()
+        print(format_write_access_status(status, as_json=args.as_json))
     else:
         raise ConfigurationError("unsupported command")
     return 0

@@ -9,6 +9,7 @@ from dataclasses import asdict
 from omnicorectl.services.backup import BackupStatus
 from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgType
 from omnicorectl.services.controller import ControllerStatus
+from omnicorectl.services.control_station import WriteAccessStatus
 from omnicorectl.services.files import DownloadResult, FileEntry
 from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal, IoSignalDetails
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
@@ -226,6 +227,19 @@ def format_backup_status(status: BackupStatus, *, as_json: bool) -> str:
     if as_json:
         return _json_object(status)
     return f"Backup state: {status.state}"
+
+
+def format_write_access_status(status: WriteAccessStatus, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(status)
+    return "\n".join(
+        (
+            f"Write access held:        {_yes_no(status.held)}",
+            f"External control enabled: {_yes_no(status.external_control_enabled)}",
+            f"Holder ID:                {status.holder_id}",
+            f"Holder name:              {status.holder_name}",
+        )
+    )
 
 
 def _format_table(headings: tuple[str, ...], rows: list[tuple[str, ...]]) -> str:
