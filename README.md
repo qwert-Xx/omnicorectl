@@ -68,6 +68,9 @@ export OMNICORE_CONTROL_STATION_PIN='set-a-numeric-pin'
 # Upload defaults to no-overwrite and uses scoped RW8 write access.
 .venv/bin/omnicorectl --insecure file upload ./local.bin '$TEMP/local.bin'
 
+# Deletion requires explicit confirmation and the same scoped write access.
+.venv/bin/omnicorectl --insecure file delete '$TEMP/local.bin' --yes
+
 # Read the controller backup engine state.
 .venv/bin/omnicorectl --insecure backup status
 

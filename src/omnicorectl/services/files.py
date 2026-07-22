@@ -44,6 +44,11 @@ class UploadResult:
     bytes_written: int
 
 
+@dataclass(frozen=True, slots=True)
+class DeleteResult:
+    remote_path: str
+
+
 class FileService:
     def __init__(self, client: RwsClient) -> None:
         self._client = client
@@ -150,6 +155,13 @@ class FileService:
             remote_path=normalized,
             bytes_written=bytes_written,
         )
+
+    def delete_file(self, remote_path: str) -> DeleteResult:
+        normalized, endpoint = _file_endpoint(remote_path)
+        if normalized == "/":
+            raise ConfigurationError("a remote file path is required for deletion")
+        self._client.delete(endpoint)
+        return DeleteResult(remote_path=normalized)
 
 
 def _file_endpoint(path: str) -> tuple[str, str]:

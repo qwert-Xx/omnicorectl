@@ -140,6 +140,29 @@ class FileServiceTests(unittest.TestCase):
             ["GET /fileservice/$TEMP", "PUT /fileservice/$TEMP/test upload.bin"],
         )
 
+    def test_deletes_encoded_remote_file(self) -> None:
+        calls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            calls.append(f"{request.method} {request.url.raw_path.decode()}")
+            return httpx.Response(204)
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            result = FileService(client).delete_file("$TEMP/test upload.bin")
+
+        self.assertEqual(result.remote_path, "/$TEMP/test upload.bin")
+        self.assertEqual(
+            calls, ["DELETE /fileservice/%24TEMP/test%20upload.bin"]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

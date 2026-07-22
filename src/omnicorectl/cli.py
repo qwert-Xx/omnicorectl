@@ -25,6 +25,7 @@ from omnicorectl.output import (
     format_cfg_instance,
     format_cfg_instances,
     format_cfg_types,
+    format_delete_result,
     format_devices,
     format_download_result,
     format_file_entries,
@@ -173,6 +174,14 @@ def _add_file_commands(groups: argparse._SubParsersAction) -> None:
     upload.add_argument("remote_path")
     upload.add_argument("--force", action="store_true")
     upload.add_argument("--json", action="store_true", dest="as_json")
+    delete = commands.add_parser("delete", help="delete one controller file")
+    delete.add_argument("remote_path")
+    delete.add_argument(
+        "--yes",
+        action="store_true",
+        help="confirm permanent deletion",
+    )
+    delete.add_argument("--json", action="store_true", dest="as_json")
 
 
 def _add_backup_commands(groups: argparse._SubParsersAction) -> None:
@@ -283,6 +292,14 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
                 Path(args.local_path), args.remote_path, overwrite=args.force
             )
         print(format_upload_result(result, as_json=args.as_json))
+    elif command == ("file", "delete"):
+        if not args.yes:
+            raise ConfigurationError("file delete requires explicit --yes confirmation")
+        files = FileService(client)
+        station = _remote_control_station(args)
+        with ControlStationService(client).write_access(station):
+            result = files.delete_file(args.remote_path)
+        print(format_delete_result(result, as_json=args.as_json))
     elif command == ("backup", "status"):
         print(format_backup_status(BackupService(client).status(), as_json=args.as_json))
     elif command == ("controlstation", "status"):

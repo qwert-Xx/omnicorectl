@@ -153,6 +153,11 @@ class RwsClient:
             )
         return total
 
+    def delete(self, path: str) -> None:
+        """Delete one controller resource."""
+
+        self._request("DELETE", path)
+
     def close(self) -> None:
         if self._closed:
             return
