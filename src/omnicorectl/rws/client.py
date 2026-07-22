@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterator
 from typing import Any, BinaryIO
 from urllib.parse import urlsplit
@@ -224,14 +225,23 @@ class RwsClient:
 
     @staticmethod
     def _raise_for_status(response: httpx.Response, method: str, path: str) -> None:
+        controller_code, controller_message = _controller_error(response)
+        detail = ""
+        if controller_code or controller_message:
+            label = f"ABB {controller_code}" if controller_code else "ABB"
+            detail = f" ({label}: {controller_message or 'no message'})"
         if response.status_code == 401:
-            raise AuthenticationError("controller rejected the username or password")
+            raise AuthenticationError(
+                f"controller rejected the username or password{detail}"
+            )
         if response.status_code == 403:
-            raise AuthorizationError(f"controller denied access to {path}")
+            raise AuthorizationError(f"controller denied access to {path}{detail}")
         if response.is_error:
             raise RwsHttpError(
                 response.status_code,
-                f"RWS {method} {path} returned HTTP {response.status_code}",
+                f"RWS {method} {path} returned HTTP {response.status_code}{detail}",
+                controller_code=controller_code,
+                controller_message=controller_message,
             )
 
     def _throttle(self) -> None:
@@ -242,3 +252,42 @@ class RwsClient:
                 self._sleep(remaining)
                 now = self._clock()
         self._last_request_at = now
+
+
+def _controller_error(response: httpx.Response) -> tuple[str, str]:
+    """Extract ABB's internal status from RWS JSON or XHTML error bodies."""
+
+    if not response.is_error:
+        return "", ""
+    try:
+        response.read()
+    except httpx.HTTPError:
+        return "", ""
+
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+    if isinstance(payload, dict):
+        status = payload.get("status")
+        if isinstance(status, dict):
+            return _clean_detail(status.get("code")), _clean_detail(status.get("msg"))
+
+    try:
+        root = ET.fromstring(response.content)
+    except (ET.ParseError, ValueError):
+        return "", ""
+    code = ""
+    message = ""
+    for element in root.iter():
+        if element.attrib.get("class") == "code":
+            code = _clean_detail(element.text)
+        elif element.attrib.get("class") == "msg":
+            message = _clean_detail(element.text)
+    return code, message
+
+
+def _clean_detail(value: object, *, limit: int = 500) -> str:
+    if value is None or isinstance(value, (dict, list)):
+        return ""
+    return " ".join(str(value).split())[:limit]

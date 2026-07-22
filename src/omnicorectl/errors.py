@@ -28,7 +28,15 @@ class ProtocolError(OmnicoreError):
 class RwsHttpError(OmnicoreError):
     """RWS returned an unsuccessful HTTP response."""
 
-    def __init__(self, status_code: int, message: str):
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        *,
+        controller_code: str = "",
+        controller_message: str = "",
+    ):
         super().__init__(message)
         self.status_code = status_code
-
+        self.controller_code = controller_code
+        self.controller_message = controller_message
