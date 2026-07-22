@@ -61,8 +61,10 @@ class RwsClient:
     def __exit__(self, *_: object) -> None:
         self.close()
 
-    def get_json(self, path: str) -> dict[str, Any]:
-        response = self._request("GET", path)
+    def get_json(
+        self, path: str, *, params: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        response = self._request("GET", path, params=params)
         try:
             payload = response.json()
         except ValueError as exc:
@@ -85,10 +87,16 @@ class RwsClient:
             self._client.close()
             self._closed = True
 
-    def _request(self, method: str, path: str) -> httpx.Response:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, str] | None = None,
+    ) -> httpx.Response:
         self._throttle()
         try:
-            response = self._client.request(method, path)
+            response = self._client.request(method, path, params=params)
         except httpx.TimeoutException as exc:
             raise NetworkError(f"request timed out: {method} {path}") from exc
         except httpx.RequestError as exc:
@@ -113,4 +121,3 @@ class RwsClient:
                 self._sleep(remaining)
                 now = self._clock()
         self._last_request_at = now
-

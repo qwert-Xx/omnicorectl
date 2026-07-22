@@ -37,6 +37,9 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 
 # List configured I/O networks.
 .venv/bin/omnicorectl --insecure io networks
+
+# List devices belonging to one network.
+.venv/bin/omnicorectl --insecure io devices EtherCAT
 ```
 
 Global connection options must precede the command group. `--host` and
