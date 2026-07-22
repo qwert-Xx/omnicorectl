@@ -43,9 +43,15 @@ A unique probe under `$TEMP` exercised the complete file workflow:
 8. confirmed the probe no longer appeared under `$TEMP`;
 9. confirmed final write-access status was `held=false` with holder `none`.
 
-Both hashes were identical. The probe was removed from the controller. A later
-safety hardening added a directory preflight to `file delete`; its protocol and
-refusal paths are covered by the unit suite.
+Both hashes were identical. The probe was removed from the controller.
+
+The final completion audit repeated the workflow after adding the `file delete`
+type guard. It read one RAPID task, six I/O networks, all six CFG domains, and a
+`Backup Ready` state. The 4,806-byte probe passed upload, download, SHA-256
+comparison, parent-directory preflight, ordinary-file verification, deletion,
+and absence verification. Its SHA-256 was
+`94d05228aff4f9d3de5725b91c8b94b229cc3e5b34fc5822ff15213085c101eb`.
+Final write access was again unheld with holder `none`.
 
 ## Control Station wire detail
 
