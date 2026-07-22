@@ -7,21 +7,20 @@ import os
 import unittest
 from unittest.mock import patch
 
-from omnicorectl.cli import (
-    _format_modules,
-    _format_devices,
-    _format_cfg_domains,
-    _format_cfg_types,
-    _format_cfg_instances,
-    _format_cfg_instance,
-    _format_networks,
-    _format_signals,
-    _format_signal_details,
-    _format_status,
-    _format_tasks,
-    _write_source,
-    build_parser,
-    main,
+from omnicorectl.cli import build_parser, main
+from omnicorectl.output import (
+    format_cfg_domains,
+    format_cfg_instance,
+    format_cfg_instances,
+    format_cfg_types,
+    format_devices,
+    format_modules,
+    format_networks,
+    format_signal_details,
+    format_signals,
+    format_status,
+    format_tasks,
+    write_source,
 )
 from omnicorectl.services.controller import ControllerStatus
 from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgType
@@ -43,12 +42,12 @@ STATUS = ControllerStatus(
 
 class CliTests(unittest.TestCase):
     def test_status_json_has_stable_machine_keys(self) -> None:
-        output = json.loads(_format_status(STATUS, as_json=True))
+        output = json.loads(format_status(STATUS, as_json=True))
         self.assertEqual(output["controller_id"], "460-300278")
         self.assertEqual(output["rapid_execution"], "stopped")
 
     def test_status_text_is_human_readable(self) -> None:
-        output = _format_status(STATUS, as_json=False)
+        output = format_status(STATUS, as_json=False)
         self.assertIn("Operation mode:    MANR", output)
         self.assertIn("Controller state:  motoroff", output)
 
@@ -76,11 +75,11 @@ class CliTests(unittest.TestCase):
 
     def test_rapid_tasks_table_and_json(self) -> None:
         task = RapidTask("T_ROB1", "normal", "loaded", "ready", True, True)
-        table = _format_tasks([task], as_json=False)
+        table = format_tasks([task], as_json=False)
         self.assertIn("NAME", table)
         self.assertIn("T_ROB1", table)
         self.assertIn("yes", table)
-        data = json.loads(_format_tasks([task], as_json=True))
+        data = json.loads(format_tasks([task], as_json=True))
         self.assertEqual(data[0]["name"], "T_ROB1")
         self.assertTrue(data[0]["motion_task"])
 
@@ -89,9 +88,9 @@ class CliTests(unittest.TestCase):
             RapidModule("T_ROB1", "BASE", "SysMod"),
             RapidModule("T_ROB1", "EGM_StreamMotion", "ProgMod"),
         ]
-        table = _format_modules(modules, as_json=False)
+        table = format_modules(modules, as_json=False)
         self.assertIn("EGM_StreamMotion  ProgMod", table)
-        data = json.loads(_format_modules(modules, as_json=True))
+        data = json.loads(format_modules(modules, as_json=True))
         self.assertEqual(data[0]["task"], "T_ROB1")
         self.assertEqual(data[1]["module_type"], "ProgMod")
 
@@ -99,28 +98,28 @@ class CliTests(unittest.TestCase):
         module = ModuleSource("T_ROB1", "Test", 7, 20, "MODULE Test\nENDMODULE\n")
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
-            _write_source(module, as_json=False)
+            write_source(module, as_json=False)
         self.assertEqual(stdout.getvalue(), module.source)
 
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
-            _write_source(module, as_json=True)
+            write_source(module, as_json=True)
         self.assertEqual(json.loads(stdout.getvalue())["change_count"], 7)
 
     def test_io_networks_table_and_json(self) -> None:
         networks = [IoNetwork("EtherCAT", "running", "started")]
-        table = _format_networks(networks, as_json=False)
+        table = format_networks(networks, as_json=False)
         self.assertIn("PHYSICAL STATE", table)
         self.assertIn("EtherCAT", table)
-        data = json.loads(_format_networks(networks, as_json=True))
+        data = json.loads(format_networks(networks, as_json=True))
         self.assertEqual(data[0]["logical_state"], "started")
 
     def test_io_devices_table_and_json(self) -> None:
         devices = [IoDevice("EtherCAT", "EC_Internal_Device", "running", "enabled", "")]
-        table = _format_devices(devices, as_json=False)
+        table = format_devices(devices, as_json=False)
         self.assertIn("EC_Internal_Device", table)
         self.assertIn("ADDRESS", table)
-        data = json.loads(_format_devices(devices, as_json=True))
+        data = json.loads(format_devices(devices, as_json=True))
         self.assertEqual(data[0]["network"], "EtherCAT")
         self.assertEqual(data[0]["address"], "")
 
@@ -136,10 +135,10 @@ class CliTests(unittest.TestCase):
                 "not simulated",
             )
         ]
-        table = _format_signals(signals, as_json=False)
+        table = format_signals(signals, as_json=False)
         self.assertIn("EtherCAT_DI", table)
         self.assertIn("EC_Internal_Device", table)
-        data = json.loads(_format_signals(signals, as_json=True))
+        data = json.loads(format_signals(signals, as_json=True))
         self.assertEqual(data[0]["signal_type"], "DI")
         self.assertEqual(data[0]["value"], "1")
 
@@ -159,33 +158,33 @@ class CliTests(unittest.TestCase):
             "None",
             "N/A",
         )
-        text = _format_signal_details(signal, as_json=False)
+        text = format_signal_details(signal, as_json=False)
         self.assertIn("Network/Device/Signal", text)
         self.assertIn("Quality:         good", text)
-        data = json.loads(_format_signal_details(signal, as_json=True))
+        data = json.loads(format_signal_details(signal, as_json=True))
         self.assertEqual(data["physical_value"], "1")
 
     def test_cfg_domains_text_and_json(self) -> None:
         domains = [CfgDomain("EIO"), CfgDomain("MOC")]
-        self.assertEqual(_format_cfg_domains(domains, as_json=False), "EIO\nMOC")
-        data = json.loads(_format_cfg_domains(domains, as_json=True))
+        self.assertEqual(format_cfg_domains(domains, as_json=False), "EIO\nMOC")
+        data = json.loads(format_cfg_domains(domains, as_json=True))
         self.assertEqual(data, [{"name": "EIO"}, {"name": "MOC"}])
 
     def test_cfg_types_text_and_json(self) -> None:
         cfg_types = [CfgType("EIO", "EIO_SIGNAL"), CfgType("EIO", "ETHERCAT_NETWORK")]
-        text = _format_cfg_types(cfg_types, as_json=False)
+        text = format_cfg_types(cfg_types, as_json=False)
         self.assertEqual(text, "EIO_SIGNAL\nETHERCAT_NETWORK")
-        data = json.loads(_format_cfg_types(cfg_types, as_json=True))
+        data = json.loads(format_cfg_types(cfg_types, as_json=True))
         self.assertEqual(data[0], {"domain": "EIO", "name": "EIO_SIGNAL"})
 
     def test_cfg_instances_table_and_json(self) -> None:
         instances = [
             CfgInstance("EIO", "EIO_SIGNAL", "Signal1", "10", False, {"Name": "Signal1"})
         ]
-        table = _format_cfg_instances(instances, as_json=False)
+        table = format_cfg_instances(instances, as_json=False)
         self.assertIn("INSTANCE ID", table)
         self.assertIn("Signal1", table)
-        data = json.loads(_format_cfg_instances(instances, as_json=True))
+        data = json.loads(format_cfg_instances(instances, as_json=True))
         self.assertEqual(data[0]["attributes"]["Name"], "Signal1")
 
     def test_cfg_instance_details_text_and_json(self) -> None:
@@ -197,10 +196,10 @@ class CliTests(unittest.TestCase):
             False,
             {"OutputSize": "64", "Label": ""},
         )
-        text = _format_cfg_instance(instance, as_json=False)
+        text = format_cfg_instance(instance, as_json=False)
         self.assertIn("EIO/ETHERCAT_INTERNAL_DEVICE/EC_Internal_Device", text)
         self.assertIn("OutputSize  64", text)
-        data = json.loads(_format_cfg_instance(instance, as_json=True))
+        data = json.loads(format_cfg_instance(instance, as_json=True))
         self.assertEqual(data["instance_id"], "42")
 
 
