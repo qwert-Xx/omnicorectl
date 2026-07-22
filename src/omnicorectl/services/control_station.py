@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
+from uuid import UUID
 
+from omnicorectl.errors import ConfigurationError, ProtocolError
 from omnicorectl.rws.client import RwsClient
 from omnicorectl.rws.hal import first_state, required_bool, required_text
 
@@ -14,6 +18,30 @@ class WriteAccessStatus:
     external_control_enabled: bool
     holder_id: str
     holder_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class RemoteControlStation:
+    name: str
+    station_id: str
+    pin: str
+    release_when_lost: bool = True
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ConfigurationError("Control Station name cannot be empty")
+        try:
+            UUID(self.station_id)
+        except ValueError as exc:
+            raise ConfigurationError("Control Station ID must be a UUID") from exc
+        if not self.pin.isdigit():
+            raise ConfigurationError("Control Station PIN must contain only digits")
+
+    @property
+    def wire_id(self) -> str:
+        """Return ABB's required braced GUID representation."""
+
+        return f"{{{UUID(self.station_id)}}}"
 
 
 class ControlStationService:
@@ -47,3 +75,46 @@ class ControlStationService:
                 resource="Control Station write access",
             ),
         )
+
+    def register_remote(self, station: RemoteControlStation) -> None:
+        self._client.post_form(
+            "/rw/controlstation/register/remote",
+            {
+                "control-station-name": station.name,
+                "control-station-id": station.wire_id,
+                "pincode": station.pin,
+                "release-write-access-when-lost": (
+                    "true" if station.release_when_lost else "false"
+                ),
+            },
+        )
+
+    def request_write_access(self) -> None:
+        self._client.post_form("/rw/controlstation/writeaccess/request")
+
+    def release_write_access(self) -> None:
+        self._client.post_form("/rw/controlstation/writeaccess/release")
+
+    @contextmanager
+    def write_access(
+        self, station: RemoteControlStation
+    ) -> Iterator[WriteAccessStatus]:
+        """Hold write access for one bounded operation and always release it."""
+
+        self.register_remote(station)
+        acquired = False
+        try:
+            self.request_write_access()
+            acquired = True
+            status = self.status()
+            if not status.external_control_enabled:
+                raise ProtocolError("external control is not enabled on the controller")
+            holder_id = status.holder_id.strip("{}").lower()
+            if not status.held or holder_id != str(UUID(station.station_id)).lower():
+                raise ProtocolError(
+                    "write access request completed but this Control Station is not the holder"
+                )
+            yield status
+        finally:
+            if acquired:
+                self.release_write_access()

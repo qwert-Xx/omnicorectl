@@ -141,6 +141,9 @@ needs them, not as empty placeholders.
 - A command that obtains write access releases it in `finally`, including after
   errors or interrupts.
 
+The verified RobotWare 8 Control Station form and lifecycle are documented in
+[`control-station.md`](control-station.md).
+
 Initial invocation shape:
 
 ```bash
@@ -181,4 +184,3 @@ commit or development notes.
 - OpenAPI generation is deferred to development tooling; generated endpoint
   code will not be accepted until its output is clearer and better tested than
   the explicit mapping.
-

@@ -96,6 +96,14 @@ class RwsClient:
             raise ProtocolError(f"{path}: expected a JSON object")
         return payload
 
+    def post_form(self, path: str, data: dict[str, str] | None = None) -> None:
+        self._request(
+            "POST",
+            path,
+            data=data or {},
+            headers={"Content-Type": FORM_V2},
+        )
+
     def download(self, path: str, destination: BinaryIO) -> int:
         """Stream a controller resource to an already-open binary destination."""
 
