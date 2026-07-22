@@ -19,6 +19,7 @@ from omnicorectl.errors import (
     ProtocolError,
 )
 from omnicorectl.rws import RwsClient
+from omnicorectl.services.cfg import CfgDomain, CfgService
 from omnicorectl.services.controller import ControllerService, ControllerStatus
 from omnicorectl.services.io import (
     IoDevice,
@@ -86,6 +87,11 @@ def build_parser() -> argparse.ArgumentParser:
     io_get.add_argument("device")
     io_get.add_argument("name")
     io_get.add_argument("--json", action="store_true", dest="as_json")
+
+    cfg = groups.add_parser("cfg", help="controller configuration database")
+    cfg_commands = cfg.add_subparsers(dest="command", required=True)
+    domains = cfg_commands.add_parser("domains", help="list CFG domains")
+    domains.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -142,6 +148,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     args.network, args.device, args.name
                 )
                 print(_format_signal_details(signal, as_json=args.as_json))
+                return 0
+            if (args.group, args.command) == ("cfg", "domains"):
+                domains = CfgService(client).list_domains()
+                print(_format_cfg_domains(domains, as_json=args.as_json))
                 return 0
         raise ConfigurationError("unsupported command")
     except ConfigurationError as exc:
@@ -335,6 +345,16 @@ def _format_signal_details(signal: IoSignalDetails, *, as_json: bool) -> str:
             f"Safety level:    {signal.safety_level}",
         )
     )
+
+
+def _format_cfg_domains(domains: list[CfgDomain], *, as_json: bool) -> str:
+    if as_json:
+        return json.dumps(
+            [asdict(domain) for domain in domains], indent=2, ensure_ascii=False
+        )
+    if not domains:
+        return "No CFG domains found."
+    return "\n".join(domain.name for domain in domains)
 
 
 def _password() -> str:

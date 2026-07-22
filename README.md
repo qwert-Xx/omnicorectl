@@ -48,6 +48,9 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 
 # Read logical/physical state and access metadata for one signal.
 .venv/bin/omnicorectl --insecure io get SC_Feedback_Net SC_Feedback_Dev SafetyEnable
+
+# Browse controller configuration domains.
+.venv/bin/omnicorectl --insecure cfg domains
 ```
 
 Global connection options must precede the command group. `--host` and

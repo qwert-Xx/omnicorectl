@@ -10,6 +10,7 @@ from unittest.mock import patch
 from omnicorectl.cli import (
     _format_modules,
     _format_devices,
+    _format_cfg_domains,
     _format_networks,
     _format_signals,
     _format_signal_details,
@@ -20,6 +21,7 @@ from omnicorectl.cli import (
     main,
 )
 from omnicorectl.services.controller import ControllerStatus
+from omnicorectl.services.cfg import CfgDomain
 from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal, IoSignalDetails
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
 
@@ -159,6 +161,12 @@ class CliTests(unittest.TestCase):
         self.assertIn("Quality:         good", text)
         data = json.loads(_format_signal_details(signal, as_json=True))
         self.assertEqual(data["physical_value"], "1")
+
+    def test_cfg_domains_text_and_json(self) -> None:
+        domains = [CfgDomain("EIO"), CfgDomain("MOC")]
+        self.assertEqual(_format_cfg_domains(domains, as_json=False), "EIO\nMOC")
+        data = json.loads(_format_cfg_domains(domains, as_json=True))
+        self.assertEqual(data, [{"name": "EIO"}, {"name": "MOC"}])
 
 
 if __name__ == "__main__":
