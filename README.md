@@ -62,6 +62,9 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 
 # Stream a controller file to an atomic local destination; --force allows replacement.
 .venv/bin/omnicorectl --insecure file download '$HOME/sc_vsm_metadata.xml' ./sc_vsm_metadata.xml
+
+# Read the controller backup engine state.
+.venv/bin/omnicorectl --insecure backup status
 ```
 
 Global connection options must precede the command group. `--host` and

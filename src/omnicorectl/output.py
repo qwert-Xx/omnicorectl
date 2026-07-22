@@ -6,6 +6,7 @@ import json
 import sys
 from dataclasses import asdict
 
+from omnicorectl.services.backup import BackupStatus
 from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgType
 from omnicorectl.services.controller import ControllerStatus
 from omnicorectl.services.files import DownloadResult, FileEntry
@@ -219,6 +220,12 @@ def format_download_result(result: DownloadResult, *, as_json: bool) -> str:
     if as_json:
         return _json_object(result)
     return f"Downloaded {result.remote_path} -> {result.local_path} ({result.bytes_written} bytes)"
+
+
+def format_backup_status(status: BackupStatus, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(status)
+    return f"Backup state: {status.state}"
 
 
 def _format_table(headings: tuple[str, ...], rows: list[tuple[str, ...]]) -> str:

@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from omnicorectl.cli import build_parser, main
 from omnicorectl.output import (
+    format_backup_status,
     format_cfg_domains,
     format_cfg_instance,
     format_cfg_instances,
@@ -25,6 +26,7 @@ from omnicorectl.output import (
     write_source,
 )
 from omnicorectl.services.controller import ControllerStatus
+from omnicorectl.services.backup import BackupStatus
 from omnicorectl.services.files import DownloadResult, FileEntry
 from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgType
 from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal, IoSignalDetails
@@ -44,6 +46,17 @@ STATUS = ControllerStatus(
 
 
 class CliTests(unittest.TestCase):
+    def test_backup_status_text_and_json(self) -> None:
+        status = BackupStatus("Backup Ready")
+        self.assertEqual(
+            format_backup_status(status, as_json=False),
+            "Backup state: Backup Ready",
+        )
+        self.assertEqual(
+            json.loads(format_backup_status(status, as_json=True)),
+            {"state": "Backup Ready"},
+        )
+
     def test_status_json_has_stable_machine_keys(self) -> None:
         output = json.loads(format_status(STATUS, as_json=True))
         self.assertEqual(output["controller_id"], "460-300278")

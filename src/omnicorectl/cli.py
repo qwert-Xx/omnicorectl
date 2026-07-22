@@ -18,6 +18,7 @@ from omnicorectl.errors import (
     ProtocolError,
 )
 from omnicorectl.output import (
+    format_backup_status,
     format_cfg_domains,
     format_cfg_instance,
     format_cfg_instances,
@@ -34,6 +35,7 @@ from omnicorectl.output import (
     write_source,
 )
 from omnicorectl.rws import RwsClient
+from omnicorectl.services.backup import BackupService
 from omnicorectl.services.cfg import CfgService
 from omnicorectl.services.controller import ControllerService
 from omnicorectl.services.files import FileService
@@ -67,6 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_io_commands(groups)
     _add_cfg_commands(groups)
     _add_file_commands(groups)
+    _add_backup_commands(groups)
     return parser
 
 
@@ -146,6 +149,13 @@ def _add_file_commands(groups: argparse._SubParsersAction) -> None:
     download.add_argument("local_path")
     download.add_argument("--force", action="store_true")
     download.add_argument("--json", action="store_true", dest="as_json")
+
+
+def _add_backup_commands(groups: argparse._SubParsersAction) -> None:
+    backup = groups.add_parser("backup", help="controller backup operations")
+    commands = backup.add_subparsers(dest="command", required=True)
+    status = commands.add_parser("status", help="show controller backup state")
+    status.add_argument("--json", action="store_true", dest="as_json")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -232,6 +242,8 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
             args.remote_path, Path(args.local_path), overwrite=args.force
         )
         print(format_download_result(result, as_json=args.as_json))
+    elif command == ("backup", "status"):
+        print(format_backup_status(BackupService(client).status(), as_json=args.as_json))
     else:
         raise ConfigurationError("unsupported command")
     return 0
