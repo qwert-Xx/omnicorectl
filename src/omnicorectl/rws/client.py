@@ -98,10 +98,17 @@ class RwsClient:
             raise ProtocolError(f"{path}: expected a JSON object")
         return payload
 
-    def post_form(self, path: str, data: dict[str, str] | None = None) -> None:
+    def post_form(
+        self,
+        path: str,
+        data: dict[str, str] | None = None,
+        *,
+        params: dict[str, str] | None = None,
+    ) -> None:
         self._request(
             "POST",
             path,
+            params=params,
             data=data or {},
             headers={"Content-Type": FORM_V2},
         )

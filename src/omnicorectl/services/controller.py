@@ -1,11 +1,11 @@
-"""Read-only controller information workflows."""
+"""Controller information and lifecycle workflows."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from omnicorectl.rws.client import RwsClient
-from omnicorectl.rws.hal import first_state, required_text
+from omnicorectl.rws.hal import first_state, required_int, required_text
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +18,13 @@ class ControllerStatus:
     controller_state: str
     rapid_execution: str
     execution_cycle: str
+
+
+@dataclass(frozen=True, slots=True)
+class RestartResult:
+    mode: str
+    accepted: bool
+    restart_count_before: int
 
 
 class ControllerService:
@@ -65,3 +72,22 @@ class ControllerService:
             ),
         )
 
+    def restart_count(self) -> int:
+        state = first_state(
+            self._client.get_json("/ctrl/restart/restartcount"),
+            resource="controller restart count",
+        )
+        return required_int(state, "restart-count", resource="controller restart count")
+
+    def warm_restart(self) -> RestartResult:
+        restart_count = self.restart_count()
+        self._client.post_form(
+            "/ctrl/restart",
+            {"restart-mode": "restart"},
+            params={"mastership": "implicit"},
+        )
+        return RestartResult(
+            mode="restart",
+            accepted=True,
+            restart_count_before=restart_count,
+        )

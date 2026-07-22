@@ -83,6 +83,9 @@ export OMNICORE_CONTROL_STATION_PIN='set-a-numeric-pin'
 
 # Inspect RW8 external-control and write-access state.
 .venv/bin/omnicorectl --insecure controlstation status
+
+# Request only a normal warm restart; destructive restart modes are not exposed.
+.venv/bin/omnicorectl --insecure controller restart --yes
 ```
 
 Global connection options must precede the command group. `--host` and

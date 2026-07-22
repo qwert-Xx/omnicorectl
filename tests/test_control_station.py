@@ -114,6 +114,46 @@ class ControlStationTests(unittest.TestCase):
                 "test", "12345678-1234-5678-9abc-123456789abc", "not-digits"
             )
 
+    def test_restart_scope_tolerates_release_failure(self) -> None:
+        station_id = "12345678-1234-5678-9abc-123456789abc"
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            if request.url.path.endswith("/status"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "state": [
+                            {
+                                "control-station-write-access-held": "true",
+                                "control-station-external-control-enabled": "true",
+                                "held-by-control-station-Id": f"{{{station_id}}}",
+                                "held-by-control-station-name": "restart test",
+                            }
+                        ]
+                    },
+                )
+            if request.url.path.endswith("/release"):
+                return httpx.Response(
+                    503,
+                    json={"status": {"code": -1, "msg": "restarting"}},
+                )
+            return httpx.Response(204)
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            station = RemoteControlStation("restart test", station_id, "1234")
+            with ControlStationService(client).write_access(
+                station, best_effort_release=True
+            ):
+                pass
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,7 +8,7 @@ from dataclasses import asdict
 
 from omnicorectl.services.backup import BackupResult, BackupStatus
 from omnicorectl.services.cfg import CfgChange, CfgDomain, CfgInstance, CfgType
-from omnicorectl.services.controller import ControllerStatus
+from omnicorectl.services.controller import ControllerStatus, RestartResult
 from omnicorectl.services.control_station import WriteAccessStatus
 from omnicorectl.services.files import (
     DeleteResult,
@@ -34,6 +34,15 @@ def format_status(status: ControllerStatus, *, as_json: bool) -> str:
             f"RAPID execution:   {status.rapid_execution}",
             f"Execution cycle:   {status.execution_cycle}",
         )
+    )
+
+
+def format_restart_result(result: RestartResult, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(result)
+    return (
+        "Warm restart accepted; the controller connection may drop "
+        f"(previous restart count: {result.restart_count_before})."
     )
 
 

@@ -22,6 +22,7 @@ from omnicorectl.output import (
     format_file_entries,
     format_modules,
     format_networks,
+    format_restart_result,
     format_signal_details,
     format_signals,
     format_status,
@@ -30,7 +31,7 @@ from omnicorectl.output import (
     format_write_access_status,
     write_source,
 )
-from omnicorectl.services.controller import ControllerStatus
+from omnicorectl.services.controller import ControllerStatus, RestartResult
 from omnicorectl.services.control_station import WriteAccessStatus
 from omnicorectl.services.backup import BackupResult, BackupStatus
 from omnicorectl.services.files import (
@@ -101,6 +102,14 @@ class CliTests(unittest.TestCase):
         output = format_status(STATUS, as_json=False)
         self.assertIn("Operation mode:    MANR", output)
         self.assertIn("Controller state:  motoroff", output)
+
+    def test_restart_result_text_and_json(self) -> None:
+        result = RestartResult("restart", True, 7)
+        text = format_restart_result(result, as_json=False)
+        self.assertIn("Warm restart accepted", text)
+        self.assertIn("7", text)
+        data = json.loads(format_restart_result(result, as_json=True))
+        self.assertEqual(data["mode"], "restart")
 
     def test_missing_connection_configuration_returns_exit_2(self) -> None:
         stderr = io.StringIO()

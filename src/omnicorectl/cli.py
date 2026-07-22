@@ -33,6 +33,7 @@ from omnicorectl.output import (
     format_file_entries,
     format_modules,
     format_networks,
+    format_restart_result,
     format_signal_details,
     format_signals,
     format_status,
@@ -100,6 +101,14 @@ def _add_controller_commands(groups: argparse._SubParsersAction) -> None:
     commands = controller.add_subparsers(dest="command", required=True)
     status = commands.add_parser("status", help="show current controller status")
     status.add_argument("--json", action="store_true", dest="as_json")
+    restart = commands.add_parser("restart", help="request a warm controller restart")
+    restart.add_argument("--yes", action="store_true", help="confirm warm restart")
+    restart.add_argument(
+        "--allow-running",
+        action="store_true",
+        help="allow restart while RAPID is not stopped",
+    )
+    restart.add_argument("--json", action="store_true", dest="as_json")
 
 
 def _add_rapid_commands(groups: argparse._SubParsersAction) -> None:
@@ -272,6 +281,23 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
     command = (args.group, args.command)
     if command == ("controller", "status"):
         print(format_status(ControllerService(client).status(), as_json=args.as_json))
+    elif command == ("controller", "restart"):
+        if not args.yes:
+            raise ConfigurationError(
+                "controller restart requires explicit --yes confirmation"
+            )
+        controller = ControllerService(client)
+        status = controller.status()
+        if not args.allow_running and status.rapid_execution.lower() != "stopped":
+            raise ConfigurationError(
+                "RAPID is not stopped; stop it or explicitly use --allow-running"
+            )
+        station = _remote_control_station(args)
+        with ControlStationService(client).write_access(
+            station, best_effort_release=True
+        ):
+            result = controller.warm_restart()
+        print(format_restart_result(result, as_json=args.as_json))
     elif command == ("rapid", "tasks"):
         print(format_tasks(RapidService(client).list_tasks(), as_json=args.as_json))
     elif command == ("rapid", "modules"):

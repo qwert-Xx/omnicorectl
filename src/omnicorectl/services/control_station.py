@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from uuid import UUID
 
-from omnicorectl.errors import ConfigurationError, ProtocolError
+from omnicorectl.errors import ConfigurationError, OmnicoreError, ProtocolError
 from omnicorectl.rws.client import RwsClient
 from omnicorectl.rws.hal import first_state, required_bool, required_text
 
@@ -97,7 +97,10 @@ class ControlStationService:
 
     @contextmanager
     def write_access(
-        self, station: RemoteControlStation
+        self,
+        station: RemoteControlStation,
+        *,
+        best_effort_release: bool = False,
     ) -> Iterator[WriteAccessStatus]:
         """Hold write access for one bounded operation and always release it."""
 
@@ -117,4 +120,8 @@ class ControlStationService:
             yield status
         finally:
             if acquired:
-                self.release_write_access()
+                try:
+                    self.release_write_access()
+                except OmnicoreError:
+                    if not best_effort_release:
+                        raise
