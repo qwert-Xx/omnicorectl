@@ -73,3 +73,21 @@ def required_int(state: dict[str, Any], key: str, *, resource: str) -> int:
         return int(value.strip() if isinstance(value, str) else value)
     except (TypeError, ValueError) as exc:
         raise ProtocolError(f"{resource}: invalid integer field {key!r}") from exc
+
+
+def has_next_link(payload: Any, *, resource: str) -> bool:
+    """Return whether an RWS HAL page advertises a following page."""
+
+    if not isinstance(payload, dict):
+        raise ProtocolError(f"{resource}: expected a JSON object")
+    links = payload.get("_links")
+    if links is None:
+        return False
+    if not isinstance(links, dict):
+        raise ProtocolError(f"{resource}: response links is not an object")
+    next_link = links.get("next")
+    if next_link is None:
+        return False
+    if not isinstance(next_link, dict) or not isinstance(next_link.get("href"), str):
+        raise ProtocolError(f"{resource}: invalid next-page link")
+    return True

@@ -11,6 +11,7 @@ from omnicorectl.cli import (
     _format_modules,
     _format_devices,
     _format_networks,
+    _format_signals,
     _format_status,
     _format_tasks,
     _write_source,
@@ -18,7 +19,7 @@ from omnicorectl.cli import (
     main,
 )
 from omnicorectl.services.controller import ControllerStatus
-from omnicorectl.services.io import IoDevice, IoNetwork
+from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
 
 
@@ -116,6 +117,25 @@ class CliTests(unittest.TestCase):
         data = json.loads(_format_devices(devices, as_json=True))
         self.assertEqual(data[0]["network"], "EtherCAT")
         self.assertEqual(data[0]["address"], "")
+
+    def test_io_signals_table_and_json(self) -> None:
+        signals = [
+            IoSignal(
+                "EtherCAT",
+                "EC_Internal_Device",
+                "EtherCAT_DI",
+                "DI",
+                "default",
+                "1",
+                "not simulated",
+            )
+        ]
+        table = _format_signals(signals, as_json=False)
+        self.assertIn("EtherCAT_DI", table)
+        self.assertIn("EC_Internal_Device", table)
+        data = json.loads(_format_signals(signals, as_json=True))
+        self.assertEqual(data[0]["signal_type"], "DI")
+        self.assertEqual(data[0]["value"], "1")
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ from omnicorectl.errors import (
 )
 from omnicorectl.rws import RwsClient
 from omnicorectl.services.controller import ControllerService, ControllerStatus
-from omnicorectl.services.io import IoDevice, IoNetwork, IoService
+from omnicorectl.services.io import IoDevice, IoNetwork, IoService, IoSignal
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidService, RapidTask
 
 
@@ -69,6 +69,12 @@ def build_parser() -> argparse.ArgumentParser:
     devices = io_commands.add_parser("devices", help="list devices on an I/O network")
     devices.add_argument("network", help="I/O network name, for example EtherCAT")
     devices.add_argument("--json", action="store_true", dest="as_json")
+    signals = io_commands.add_parser("signals", help="list or search I/O signals")
+    signals.add_argument("--network")
+    signals.add_argument("--device")
+    signals.add_argument("--type", dest="signal_type", choices=("DI", "DO", "AI", "AO", "GI", "GO"))
+    signals.add_argument("--name")
+    signals.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -110,6 +116,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             if (args.group, args.command) == ("io", "devices"):
                 devices = IoService(client).list_devices(args.network)
                 print(_format_devices(devices, as_json=args.as_json))
+                return 0
+            if (args.group, args.command) == ("io", "signals"):
+                signals = IoService(client).list_signals(
+                    network=args.network,
+                    device=args.device,
+                    signal_type=args.signal_type,
+                    name=args.name,
+                )
+                print(_format_signals(signals, as_json=args.as_json))
                 return 0
         raise ConfigurationError("unsupported command")
     except ConfigurationError as exc:
@@ -237,6 +252,39 @@ def _format_devices(devices: list[IoDevice], *, as_json: bool) -> str:
             device.address or "-",
         )
         for device in devices
+    ]
+    widths = [
+        max(len(headings[index]), *(len(row[index]) for row in rows))
+        for index in range(len(headings))
+    ]
+
+    def format_row(row: tuple[str, ...]) -> str:
+        return "  ".join(value.ljust(widths[index]) for index, value in enumerate(row))
+
+    separator = tuple("-" * width for width in widths)
+    return "\n".join(
+        (format_row(headings), format_row(separator), *(format_row(row) for row in rows))
+    )
+
+
+def _format_signals(signals: list[IoSignal], *, as_json: bool) -> str:
+    if as_json:
+        return json.dumps(
+            [asdict(signal) for signal in signals], indent=2, ensure_ascii=False
+        )
+    if not signals:
+        return "No I/O signals found."
+    headings = ("NETWORK", "DEVICE", "NAME", "TYPE", "VALUE", "STATE")
+    rows = [
+        (
+            signal.network or "-",
+            signal.device or "-",
+            signal.name,
+            signal.signal_type,
+            signal.value,
+            signal.state,
+        )
+        for signal in signals
     ]
     widths = [
         max(len(headings[index]), *(len(row[index]) for row in rows))

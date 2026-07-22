@@ -17,6 +17,7 @@ from omnicorectl.errors import (
 )
 
 HAL_JSON_V2 = "application/hal+json;v=2.0"
+FORM_V2 = "application/x-www-form-urlencoded;v=2.0"
 
 
 class RwsClient:
@@ -73,6 +74,28 @@ class RwsClient:
             raise ProtocolError(f"{path}: expected a JSON object")
         return payload
 
+    def post_json(
+        self,
+        path: str,
+        *,
+        data: dict[str, str] | None = None,
+        params: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        response = self._request(
+            "POST",
+            path,
+            params=params,
+            data=data,
+            headers={"Content-Type": FORM_V2},
+        )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise ProtocolError(f"{path}: controller did not return JSON") from exc
+        if not isinstance(payload, dict):
+            raise ProtocolError(f"{path}: expected a JSON object")
+        return payload
+
     def close(self) -> None:
         if self._closed:
             return
@@ -93,10 +116,14 @@ class RwsClient:
         path: str,
         *,
         params: dict[str, str] | None = None,
+        data: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> httpx.Response:
         self._throttle()
         try:
-            response = self._client.request(method, path, params=params)
+            response = self._client.request(
+                method, path, params=params, data=data, headers=headers
+            )
         except httpx.TimeoutException as exc:
             raise NetworkError(f"request timed out: {method} {path}") from exc
         except httpx.RequestError as exc:

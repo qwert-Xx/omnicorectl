@@ -40,6 +40,11 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 
 # List devices belonging to one network.
 .venv/bin/omnicorectl --insecure io devices EtherCAT
+
+# List all signals or search by controller-side criteria.
+.venv/bin/omnicorectl --insecure io signals
+.venv/bin/omnicorectl --insecure io signals --network EtherCAT --device EC_Internal_Device
+.venv/bin/omnicorectl --insecure io signals --type DI --json
 ```
 
 Global connection options must precede the command group. `--host` and
