@@ -59,6 +59,9 @@ export OMNICORE_PASSWORD='set-this-outside-shell-history'
 # Browse controller file volumes and directories.
 .venv/bin/omnicorectl --insecure file list
 .venv/bin/omnicorectl --insecure file list '$HOME'
+
+# Stream a controller file to an atomic local destination; --force allows replacement.
+.venv/bin/omnicorectl --insecure file download '$HOME/sc_vsm_metadata.xml' ./sc_vsm_metadata.xml
 ```
 
 Global connection options must precede the command group. `--host` and

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import quote
 
 from omnicorectl.errors import ConfigurationError, ProtocolError
@@ -24,6 +27,13 @@ class FileEntry:
     read_only: bool
     created: str
     modified: str
+
+
+@dataclass(frozen=True, slots=True)
+class DownloadResult:
+    remote_path: str
+    local_path: str
+    bytes_written: int
 
 
 class FileService:
@@ -58,6 +68,55 @@ class FileService:
                 )
             )
         return entries
+
+    def download_file(
+        self, remote_path: str, local_path: Path, *, overwrite: bool = False
+    ) -> DownloadResult:
+        normalized, endpoint = _file_endpoint(remote_path)
+        if normalized == "/":
+            raise ConfigurationError("a file path is required for download")
+        destination = local_path.expanduser().resolve()
+        if not destination.parent.is_dir():
+            raise ConfigurationError(
+                f"destination directory does not exist: {destination.parent}"
+            )
+        if destination.exists() and not overwrite:
+            raise ConfigurationError(f"destination already exists: {destination}")
+
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w+b",
+                prefix=f".{destination.name}.",
+                suffix=".part",
+                dir=destination.parent,
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                bytes_written = self._client.download(endpoint, temporary)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+
+            if overwrite:
+                os.replace(temporary_path, destination)
+            else:
+                try:
+                    os.link(temporary_path, destination)
+                except FileExistsError as exc:
+                    raise ConfigurationError(
+                        f"destination already exists: {destination}"
+                    ) from exc
+                temporary_path.unlink()
+            temporary_path = None
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+
+        return DownloadResult(
+            remote_path=normalized,
+            local_path=str(destination),
+            bytes_written=bytes_written,
+        )
 
 
 def _file_endpoint(path: str) -> tuple[str, str]:

@@ -6,6 +6,7 @@ import argparse
 import getpass
 import os
 import sys
+from pathlib import Path
 from typing import Sequence
 
 from omnicorectl.errors import (
@@ -22,6 +23,7 @@ from omnicorectl.output import (
     format_cfg_instances,
     format_cfg_types,
     format_devices,
+    format_download_result,
     format_file_entries,
     format_modules,
     format_networks,
@@ -139,6 +141,11 @@ def _add_file_commands(groups: argparse._SubParsersAction) -> None:
     list_command = commands.add_parser("list", aliases=["ls"], help="list a directory")
     list_command.add_argument("path", nargs="?", default="/")
     list_command.add_argument("--json", action="store_true", dest="as_json")
+    download = commands.add_parser("download", help="download one controller file")
+    download.add_argument("remote_path")
+    download.add_argument("local_path")
+    download.add_argument("--force", action="store_true")
+    download.add_argument("--json", action="store_true", dest="as_json")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -220,6 +227,11 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
     elif args.group == "file" and args.command in {"list", "ls"}:
         entries = FileService(client).list_directory(args.path)
         print(format_file_entries(entries, as_json=args.as_json))
+    elif command == ("file", "download"):
+        result = FileService(client).download_file(
+            args.remote_path, Path(args.local_path), overwrite=args.force
+        )
+        print(format_download_result(result, as_json=args.as_json))
     else:
         raise ConfigurationError("unsupported command")
     return 0

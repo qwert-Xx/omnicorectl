@@ -14,6 +14,7 @@ from omnicorectl.output import (
     format_cfg_instances,
     format_cfg_types,
     format_devices,
+    format_download_result,
     format_file_entries,
     format_modules,
     format_networks,
@@ -24,7 +25,7 @@ from omnicorectl.output import (
     write_source,
 )
 from omnicorectl.services.controller import ControllerStatus
-from omnicorectl.services.files import FileEntry
+from omnicorectl.services.files import DownloadResult, FileEntry
 from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgType
 from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal, IoSignalDetails
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
@@ -223,6 +224,13 @@ class CliTests(unittest.TestCase):
         data = json.loads(format_file_entries(entries, as_json=True))
         self.assertEqual(data[0]["size"], 6349)
         self.assertTrue(data[1]["is_directory"])
+
+    def test_download_result_text_and_json(self) -> None:
+        result = DownloadResult("/$HOME/test.bin", "/tmp/test.bin", 123)
+        text = format_download_result(result, as_json=False)
+        self.assertIn("123 bytes", text)
+        data = json.loads(format_download_result(result, as_json=True))
+        self.assertEqual(data["remote_path"], "/$HOME/test.bin")
 
 
 if __name__ == "__main__":

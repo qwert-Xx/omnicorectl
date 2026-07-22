@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import httpx
 
@@ -60,6 +62,38 @@ class FileServiceTests(unittest.TestCase):
         service = FileService(client)  # type: ignore[arg-type]
         with self.assertRaises(ConfigurationError):
             service.list_directory("/$HOME/../TEMP")
+
+    def test_downloads_atomically_and_refuses_overwrite(self) -> None:
+        content = b"binary\x00controller\xffdata"
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            self.assertEqual(
+                request.url.raw_path,
+                b"/fileservice/%24HOME/Safety%20Configuration%20Report.pdf",
+            )
+            return httpx.Response(200, content=content)
+
+        with TemporaryDirectory() as directory:
+            destination = Path(directory) / "report.pdf"
+            with RwsClient(
+                "192.0.2.1",
+                "test-user",
+                "test-password",
+                transport=httpx.MockTransport(handler),
+                request_interval=0,
+            ) as client:
+                service = FileService(client)
+                result = service.download_file(
+                    "$HOME/Safety Configuration Report.pdf", destination
+                )
+                self.assertEqual(destination.read_bytes(), content)
+                self.assertEqual(result.bytes_written, len(content))
+                with self.assertRaises(ConfigurationError):
+                    service.download_file("$HOME/other.pdf", destination)
+
+            self.assertEqual(list(Path(directory).glob("*.part")), [])
 
 
 if __name__ == "__main__":

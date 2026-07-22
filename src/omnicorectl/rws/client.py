@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, BinaryIO
 
 import httpx
 
@@ -96,6 +96,23 @@ class RwsClient:
             raise ProtocolError(f"{path}: expected a JSON object")
         return payload
 
+    def download(self, path: str, destination: BinaryIO) -> int:
+        """Stream a controller resource to an already-open binary destination."""
+
+        self._throttle()
+        total = 0
+        try:
+            with self._client.stream("GET", path) as response:
+                self._raise_for_status(response, "GET", path)
+                for chunk in response.iter_bytes():
+                    destination.write(chunk)
+                    total += len(chunk)
+        except httpx.TimeoutException as exc:
+            raise NetworkError(f"request timed out: GET {path}") from exc
+        except httpx.RequestError as exc:
+            raise NetworkError(f"controller connection failed: {exc}") from exc
+        return total
+
     def close(self) -> None:
         if self._closed:
             return
@@ -129,6 +146,11 @@ class RwsClient:
         except httpx.RequestError as exc:
             raise NetworkError(f"controller connection failed: {exc}") from exc
 
+        self._raise_for_status(response, method, path)
+        return response
+
+    @staticmethod
+    def _raise_for_status(response: httpx.Response, method: str, path: str) -> None:
         if response.status_code == 401:
             raise AuthenticationError("controller rejected the username or password")
         if response.status_code == 403:
@@ -138,7 +160,6 @@ class RwsClient:
                 response.status_code,
                 f"RWS {method} {path} returned HTTP {response.status_code}",
             )
-        return response
 
     def _throttle(self) -> None:
         now = self._clock()
