@@ -7,7 +7,7 @@ import sys
 from dataclasses import asdict
 
 from omnicorectl.services.backup import BackupResult, BackupStatus
-from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgType
+from omnicorectl.services.cfg import CfgChange, CfgDomain, CfgInstance, CfgType
 from omnicorectl.services.controller import ControllerStatus
 from omnicorectl.services.control_station import WriteAccessStatus
 from omnicorectl.services.files import (
@@ -200,6 +200,26 @@ def format_cfg_instance(instance: CfgInstance, *, as_json: bool) -> str:
             for key, value in instance.attributes.items()
         )
     return "\n".join(lines)
+
+
+def format_cfg_change(change: CfgChange, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(change)
+    if not change.changed:
+        return (
+            f"CFG unchanged: {change.domain}/{change.cfg_type}/{change.instance} "
+            f"{change.attribute}={change.old_value!r}"
+        )
+    return "\n".join(
+        (
+            f"CFG updated: {change.domain}/{change.cfg_type}/{change.instance}",
+            f"Attribute:   {change.attribute}",
+            f"Old value:   {change.old_value}",
+            f"New value:   {change.new_value}",
+            "Validated:   yes",
+            "Restart required: yes",
+        )
+    )
 
 
 def format_file_entries(entries: list[FileEntry], *, as_json: bool) -> str:

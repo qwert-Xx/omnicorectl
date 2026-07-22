@@ -12,6 +12,7 @@ from omnicorectl.output import (
     format_backup_result,
     format_backup_status,
     format_cfg_domains,
+    format_cfg_change,
     format_cfg_instance,
     format_cfg_instances,
     format_cfg_types,
@@ -38,7 +39,7 @@ from omnicorectl.services.files import (
     FileEntry,
     UploadResult,
 )
-from omnicorectl.services.cfg import CfgDomain, CfgInstance, CfgType
+from omnicorectl.services.cfg import CfgChange, CfgDomain, CfgInstance, CfgType
 from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal, IoSignalDetails
 from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
 
@@ -260,6 +261,24 @@ class CliTests(unittest.TestCase):
         self.assertIn("OutputSize  64", text)
         data = json.loads(format_cfg_instance(instance, as_json=True))
         self.assertEqual(data["instance_id"], "42")
+
+    def test_cfg_change_text_and_json(self) -> None:
+        change = CfgChange(
+            domain="EIO",
+            cfg_type="EIO_SIGNAL",
+            instance="Signal1",
+            attribute="Label",
+            old_value="old",
+            new_value="new",
+            changed=True,
+            validated=True,
+            restart_required=True,
+        )
+        text = format_cfg_change(change, as_json=False)
+        self.assertIn("CFG updated", text)
+        self.assertIn("Restart required: yes", text)
+        data = json.loads(format_cfg_change(change, as_json=True))
+        self.assertEqual(data["old_value"], "old")
 
     def test_file_entries_table_and_json(self) -> None:
         entries = [

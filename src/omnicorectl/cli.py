@@ -22,6 +22,7 @@ from omnicorectl.errors import (
 from omnicorectl.output import (
     format_backup_result,
     format_backup_status,
+    format_cfg_change,
     format_cfg_domains,
     format_cfg_instance,
     format_cfg_instances,
@@ -157,6 +158,15 @@ def _add_cfg_commands(groups: argparse._SubParsersAction) -> None:
     cfg_get.add_argument("cfg_type")
     cfg_get.add_argument("instance")
     cfg_get.add_argument("--json", action="store_true", dest="as_json")
+    cfg_set = commands.add_parser("set", help="update one CFG instance attribute")
+    cfg_set.add_argument("domain")
+    cfg_set.add_argument("cfg_type")
+    cfg_set.add_argument("instance")
+    cfg_set.add_argument("attribute")
+    cfg_set.add_argument("value")
+    cfg_set.add_argument("--element-count", type=_positive_int, default=1)
+    cfg_set.add_argument("--yes", action="store_true", help="confirm CFG mutation")
+    cfg_set.add_argument("--json", action="store_true", dest="as_json")
 
 
 def _add_file_commands(groups: argparse._SubParsersAction) -> None:
@@ -308,6 +318,20 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
             args.domain, args.cfg_type, args.instance
         )
         print(format_cfg_instance(instance, as_json=args.as_json))
+    elif command == ("cfg", "set"):
+        if not args.yes:
+            raise ConfigurationError("cfg set requires explicit --yes confirmation")
+        station = _remote_control_station(args)
+        with ControlStationService(client).write_access(station):
+            change = CfgService(client).set_attribute(
+                args.domain,
+                args.cfg_type,
+                args.instance,
+                args.attribute,
+                args.value,
+                element_count=args.element_count,
+            )
+        print(format_cfg_change(change, as_json=args.as_json))
     elif args.group == "file" and args.command in {"list", "ls"}:
         entries = FileService(client).list_directory(args.path)
         print(format_file_entries(entries, as_json=args.as_json))
@@ -395,6 +419,13 @@ def _positive_float(value: str) -> float:
     number = float(value)
     if number <= 0:
         raise argparse.ArgumentTypeError("must be greater than zero")
+    return number
+
+
+def _positive_int(value: str) -> int:
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError("value must be greater than zero")
     return number
 
 

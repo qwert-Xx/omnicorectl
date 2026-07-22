@@ -5,6 +5,7 @@ import unittest
 import httpx
 
 from omnicorectl.rws import RwsClient
+from omnicorectl.errors import ProtocolError
 from omnicorectl.services.cfg import CfgService
 
 
@@ -159,6 +160,134 @@ class CfgTests(unittest.TestCase):
 
         self.assertEqual(instance.instance_id, "6655648")
         self.assertEqual(instance.attributes, {"OutputSize": "64"})
+
+    def test_updates_validates_and_verifies_attribute(self) -> None:
+        calls: list[tuple[str, str, str]] = []
+        get_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal get_count
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            body = request.content.decode()
+            calls.append((request.method, request.url.path, body))
+            if request.method == "GET":
+                get_count += 1
+                return httpx.Response(
+                    200,
+                    json=_cfg_instance_payload(
+                        "Signal1", "old" if get_count == 1 else "new"
+                    ),
+                )
+            if request.url.path == "/rw/cfg/validate-instances":
+                return httpx.Response(204)
+            return httpx.Response(204)
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            change = CfgService(client).set_attribute(
+                "EIO", "EIO_SIGNAL", "Signal1", "Label", "new"
+            )
+
+        self.assertTrue(change.changed)
+        self.assertTrue(change.validated)
+        self.assertTrue(change.restart_required)
+        self.assertEqual(change.old_value, "old")
+        self.assertEqual(change.new_value, "new")
+        self.assertEqual(
+            calls,
+            [
+                (
+                    "GET",
+                    "/rw/cfg/EIO/EIO_SIGNAL/instances/Signal1",
+                    "",
+                ),
+                (
+                    "POST",
+                    "/rw/cfg/EIO/EIO_SIGNAL/instances/Signal1",
+                    "Label=%5Bnew%2C1%5D",
+                ),
+                (
+                    "POST",
+                    "/rw/cfg/validate-instances",
+                    "operation=0&cfgdomain=EIO&cfgtype=EIO_SIGNAL&instances=%5BSignal1%5D",
+                ),
+                (
+                    "GET",
+                    "/rw/cfg/EIO/EIO_SIGNAL/instances/Signal1",
+                    "",
+                ),
+            ],
+        )
+
+    def test_restores_original_value_after_validation_failure(self) -> None:
+        posts: list[tuple[str, str]] = []
+        validation_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal validation_count
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            if request.method == "GET":
+                return httpx.Response(
+                    200, json=_cfg_instance_payload("Signal1", "old")
+                )
+            posts.append((request.url.path, request.content.decode()))
+            if request.url.path == "/rw/cfg/validate-instances":
+                validation_count += 1
+                if validation_count == 1:
+                    return httpx.Response(
+                        200,
+                        json={
+                            "status": {
+                                "valid": "false",
+                                "code": "-1073437688",
+                                "msg": "Cfg instance validation failed",
+                            }
+                        },
+                    )
+                return httpx.Response(204)
+            return httpx.Response(204)
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            with self.assertRaisesRegex(ProtocolError, "original value was restored"):
+                CfgService(client).set_attribute(
+                    "EIO", "EIO_SIGNAL", "Signal1", "Label", "bad"
+                )
+
+        self.assertEqual(
+            [body for path, body in posts if path.endswith("/Signal1")],
+            ["Label=%5Bbad%2C1%5D", "Label=%5Bold%2C1%5D"],
+        )
+        self.assertEqual(validation_count, 2)
+
+
+def _cfg_instance_payload(name: str, label: str) -> dict[str, object]:
+    return {
+        "state": [
+            {
+                "_type": "cfg-dt-instance",
+                "_title": name,
+                "rdonly": "false",
+                "instanceid": "10",
+                "attrib": [
+                    {"_type": "cfg-ia-t", "_title": "Name", "value": name},
+                    {"_type": "cfg-ia-t", "_title": "Label", "value": label},
+                ],
+            }
+        ]
+    }
 
 
 if __name__ == "__main__":

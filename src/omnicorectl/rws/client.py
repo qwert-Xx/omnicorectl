@@ -133,6 +133,27 @@ class RwsClient:
             )
         return progress_uri
 
+    def post_form_optional_json(
+        self, path: str, data: dict[str, str]
+    ) -> dict[str, Any] | None:
+        """Submit a form whose success body may be JSON or empty."""
+
+        response = self._request(
+            "POST",
+            path,
+            data=data,
+            headers={"Content-Type": FORM_V2},
+        )
+        if not response.content:
+            return None
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise ProtocolError(f"{path}: controller did not return JSON") from exc
+        if not isinstance(payload, dict):
+            raise ProtocolError(f"{path}: expected a JSON object")
+        return payload
+
     def download(self, path: str, destination: BinaryIO) -> int:
         """Stream a controller resource to an already-open binary destination."""
 

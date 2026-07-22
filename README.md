@@ -58,6 +58,9 @@ export OMNICORE_CONTROL_STATION_PIN='set-a-numeric-pin'
 .venv/bin/omnicorectl --insecure cfg instances EIO EIO_SIGNAL --json
 .venv/bin/omnicorectl --insecure cfg get EIO ETHERCAT_INTERNAL_DEVICE EC_Internal_Device
 
+# Update, validate, re-read, and report that a warm restart is required.
+.venv/bin/omnicorectl --insecure cfg set EIO EIO_SIGNAL MySignal Label 'new label' --yes
+
 # Browse controller file volumes and directories.
 .venv/bin/omnicorectl --insecure file list
 .venv/bin/omnicorectl --insecure file list '$HOME'
