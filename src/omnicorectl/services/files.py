@@ -7,6 +7,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from pathlib import PurePosixPath
+from typing import BinaryIO, cast
 from urllib.parse import quote
 
 from omnicorectl.errors import ConfigurationError, ProtocolError
@@ -73,9 +74,7 @@ class FileService:
                     size=None
                     if is_directory
                     else required_int(item, "fs-size", resource="file entry"),
-                    read_only=required_bool(
-                        item, "fs-readonly", resource="file entry"
-                    ),
+                    read_only=required_bool(item, "fs-readonly", resource="file entry"),
                     created=required_text(item, "fs-cdate", resource="file entry"),
                     modified=required_text(item, "fs-mdate", resource="file entry"),
                 )
@@ -106,7 +105,9 @@ class FileService:
                 delete=False,
             ) as temporary:
                 temporary_path = Path(temporary.name)
-                bytes_written = self._client.download(endpoint, temporary)
+                bytes_written = self._client.download(
+                    endpoint, cast(BinaryIO, temporary)
+                )
                 temporary.flush()
                 os.fsync(temporary.fileno())
 

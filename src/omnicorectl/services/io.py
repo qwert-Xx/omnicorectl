@@ -73,18 +73,14 @@ class IoService:
                     physical_state=required_text(
                         item, "pstate", resource="I/O network"
                     ),
-                    logical_state=required_text(
-                        item, "lstate", resource="I/O network"
-                    ),
+                    logical_state=required_text(item, "lstate", resource="I/O network"),
                 )
             )
         return networks
 
     def list_devices(self, network: str) -> list[IoDevice]:
         resources = embedded_resources(
-            self._client.get_json(
-                "/rw/iosystem/devices", params={"network": network}
-            ),
+            self._client.get_json("/rw/iosystem/devices", params={"network": network}),
             resource=f"I/O devices on {network}",
         )
         devices = []
@@ -98,12 +94,8 @@ class IoService:
                 IoDevice(
                     network=network,
                     name=required_text(item, "name", resource="I/O device"),
-                    physical_state=required_text(
-                        item, "pstate", resource="I/O device"
-                    ),
-                    logical_state=required_text(
-                        item, "lstate", resource="I/O device"
-                    ),
+                    physical_state=required_text(item, "pstate", resource="I/O device"),
+                    logical_state=required_text(item, "lstate", resource="I/O device"),
                     address=address,
                 )
             )
@@ -139,9 +131,7 @@ class IoService:
                     params=params,
                 )
             else:
-                payload = self._client.get_json(
-                    "/rw/iosystem/signals", params=params
-                )
+                payload = self._client.get_json("/rw/iosystem/signals", params=params)
 
             resources = embedded_resources(payload, resource="I/O signals")
             for item in resources:
@@ -156,18 +146,10 @@ class IoService:
                         network=item_network,
                         device=item_device,
                         name=required_text(item, "name", resource="I/O signal"),
-                        signal_type=required_text(
-                            item, "type", resource="I/O signal"
-                        ),
-                        category=required_text(
-                            item, "category", resource="I/O signal"
-                        ),
-                        value=required_text(
-                            item, "lvalue", resource="I/O signal"
-                        ),
-                        state=required_text(
-                            item, "lstate", resource="I/O signal"
-                        ),
+                        signal_type=required_text(item, "type", resource="I/O signal"),
+                        category=required_text(item, "category", resource="I/O signal"),
+                        value=required_text(item, "lvalue", resource="I/O signal"),
+                        state=required_text(item, "lstate", resource="I/O signal"),
                     )
                 )
 
@@ -180,7 +162,8 @@ class IoService:
             quote(network, safe=""), quote(device, safe=""), quote(name, safe="")
         )
         resources = embedded_resources(
-            self._client.get_json(path), resource=f"I/O signal {network}/{device}/{name}"
+            self._client.get_json(path),
+            resource=f"I/O signal {network}/{device}/{name}",
         )
         matches = [item for item in resources if item.get("_type") == "ios-signal-li"]
         if not matches:
@@ -199,11 +182,7 @@ class IoService:
             physical_value=required_text(item, "pvalue", resource="I/O signal"),
             physical_state=required_text(item, "phstate", resource="I/O signal"),
             quality=required_text(item, "quality", resource="I/O signal"),
-            access_level=required_text(
-                item, "access-level", resource="I/O signal"
-            ),
-            write_access=required_text(
-                item, "write-access", resource="I/O signal"
-            ),
+            access_level=required_text(item, "access-level", resource="I/O signal"),
+            write_access=required_text(item, "write-access", resource="I/O signal"),
             safety_level=required_text(item, "safe-level", resource="I/O signal"),
         )

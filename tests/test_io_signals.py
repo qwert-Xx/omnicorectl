@@ -47,9 +47,7 @@ class IoSignalsTests(unittest.TestCase):
                 200,
                 json={
                     "_links": {},
-                    "_embedded": {
-                        "resources": [signal("LooseSignal", "LooseSignal")]
-                    },
+                    "_embedded": {"resources": [signal("LooseSignal", "LooseSignal")]},
                 },
             )
 
@@ -63,7 +61,9 @@ class IoSignalsTests(unittest.TestCase):
             signals = IoService(client).list_signals(page_size=2)
 
         self.assertEqual(requested_starts, ["0", "2"])
-        self.assertEqual([item.name for item in signals], ["DI_1", "DI_2", "LooseSignal"])
+        self.assertEqual(
+            [item.name for item in signals], ["DI_1", "DI_2", "LooseSignal"]
+        )
         self.assertEqual(signals[0].network, "EtherCAT")
         self.assertEqual(signals[0].device, "Device")
         self.assertIsNone(signals[2].network)

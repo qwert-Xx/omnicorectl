@@ -104,9 +104,7 @@ class FileServiceTests(unittest.TestCase):
                 return httpx.Response(200, json={})
             calls.append(f"{request.method} {request.url.path}")
             if request.method == "GET":
-                return httpx.Response(
-                    200, json={"_embedded": {"resources": []}}
-                )
+                return httpx.Response(200, json={"_embedded": {"resources": []}})
             self.assertEqual(request.method, "PUT")
             self.assertEqual(
                 request.url.raw_path, b"/fileservice/%24TEMP/test%20upload.bin"
@@ -188,9 +186,7 @@ class FileServiceTests(unittest.TestCase):
             return httpx.Response(
                 200,
                 json={
-                    "_embedded": {
-                        "resources": [_file_entry("logs", is_directory=True)]
-                    }
+                    "_embedded": {"resources": [_file_entry("logs", is_directory=True)]}
                 },
             )
 

@@ -234,9 +234,7 @@ class CfgTests(unittest.TestCase):
             if request.url.path == "/logout":
                 return httpx.Response(200, json={})
             if request.method == "GET":
-                return httpx.Response(
-                    200, json=_cfg_instance_payload("Signal1", "old")
-                )
+                return httpx.Response(200, json=_cfg_instance_payload("Signal1", "old"))
             posts.append((request.url.path, request.content.decode()))
             if request.url.path == "/rw/cfg/validate-instances":
                 validation_count += 1

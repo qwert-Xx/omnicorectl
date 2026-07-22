@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Sequence
 from dataclasses import asdict
+from typing import Any
 
 from omnicorectl.services.backup import BackupResult, BackupStatus
 from omnicorectl.services.cfg import CfgChange, CfgDomain, CfgInstance, CfgType
@@ -309,17 +311,21 @@ def _format_table(headings: tuple[str, ...], rows: list[tuple[str, ...]]) -> str
 
     separator = tuple("-" * width for width in widths)
     return "\n".join(
-        (format_row(headings), format_row(separator), *(format_row(row) for row in rows))
+        (
+            format_row(headings),
+            format_row(separator),
+            *(format_row(row) for row in rows),
+        )
     )
 
 
-def _json_object(value: object) -> str:
-    return json.dumps(asdict(value), indent=2, ensure_ascii=False)  # type: ignore[arg-type]
+def _json_object(value: Any) -> str:
+    return json.dumps(asdict(value), indent=2, ensure_ascii=False)
 
 
-def _json_list(values: list[object]) -> str:
+def _json_list(values: Sequence[Any]) -> str:
     return json.dumps(
-        [asdict(value) for value in values],  # type: ignore[arg-type]
+        [asdict(value) for value in values],
         indent=2,
         ensure_ascii=False,
     )

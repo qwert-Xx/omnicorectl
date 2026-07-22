@@ -36,9 +36,7 @@ class ControllerStatusTests(unittest.TestCase):
 
         def handler(request: httpx.Request) -> httpx.Response:
             requested_paths.append(request.url.path)
-            self.assertEqual(
-                request.headers["accept"], "application/hal+json;v=2.0"
-            )
+            self.assertEqual(request.headers["accept"], "application/hal+json;v=2.0")
             if request.url.path == "/logout":
                 return httpx.Response(200, json={})
             return httpx.Response(200, json=RESPONSES[request.url.path])
@@ -77,13 +75,9 @@ class ControllerStatusTests(unittest.TestCase):
         def handler(request: httpx.Request) -> httpx.Response:
             if request.url.path == "/logout":
                 return httpx.Response(200, json={})
-            calls.append(
-                (request.method, str(request.url), request.content.decode())
-            )
+            calls.append((request.method, str(request.url), request.content.decode()))
             if request.method == "GET":
-                return httpx.Response(
-                    200, json={"state": [{"restart-count": "7"}]}
-                )
+                return httpx.Response(200, json={"state": [{"restart-count": "7"}]})
             return httpx.Response(204)
 
         with RwsClient(

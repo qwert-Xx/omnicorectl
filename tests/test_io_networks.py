@@ -45,7 +45,9 @@ class IoNetworksTests(unittest.TestCase):
         ) as client:
             networks = IoService(client).list_networks()
 
-        self.assertEqual([network.name for network in networks], ["EtherCAT", "Virtual"])
+        self.assertEqual(
+            [network.name for network in networks], ["EtherCAT", "Virtual"]
+        )
         self.assertEqual(networks[0].physical_state, "running")
         self.assertEqual(networks[0].logical_state, "started")
 

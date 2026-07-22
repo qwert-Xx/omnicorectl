@@ -58,9 +58,7 @@ class RapidService:
                 RapidTask(
                     name=required_text(item, "name", resource="RAPID task"),
                     task_type=required_text(item, "type", resource="RAPID task"),
-                    task_state=required_text(
-                        item, "taskstate", resource="RAPID task"
-                    ),
+                    task_state=required_text(item, "taskstate", resource="RAPID task"),
                     execution_state=required_text(
                         item, "excstate", resource="RAPID task"
                     ),
@@ -86,9 +84,7 @@ class RapidService:
                 RapidModule(
                     task=task,
                     name=required_text(item, "name", resource="RAPID module"),
-                    module_type=required_text(
-                        item, "type", resource="RAPID module"
-                    ),
+                    module_type=required_text(item, "type", resource="RAPID module"),
                 )
             )
         return modules
@@ -111,7 +107,5 @@ class RapidService:
             reported_length=required_int(
                 state, "module-length", resource="RAPID module source"
             ),
-            source=required_text(
-                state, "module-text", resource="RAPID module source"
-            ),
+            source=required_text(state, "module-text", resource="RAPID module source"),
         )

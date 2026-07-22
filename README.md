@@ -110,6 +110,9 @@ The architecture and incremental development rules are documented in
 ```bash
 .venv/bin/python -m unittest discover -v
 .venv/bin/python -m compileall -q src tests
+.venv/bin/ruff check src tests
+.venv/bin/ruff format --check src tests
+.venv/bin/mypy src
 .venv/bin/python -m pip wheel --no-deps . --wheel-dir /tmp/omnicorectl-wheel
 ```
 

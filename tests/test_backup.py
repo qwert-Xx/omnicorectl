@@ -81,9 +81,7 @@ class BackupTests(unittest.TestCase):
                             "state": "pending" if poll_count == 1 else "ready",
                             "code": "294914" if poll_count == 1 else "294912",
                             "_links": {
-                                "resource": {
-                                    "href": "/fileservice/$TEMP/nightly"
-                                }
+                                "resource": {"href": "/fileservice/$TEMP/nightly"}
                             },
                         }
                     ]
@@ -125,9 +123,7 @@ class BackupTests(unittest.TestCase):
             "192.0.2.1",
             "test-user",
             "test-password",
-            transport=httpx.MockTransport(
-                lambda request: httpx.Response(200, json={})
-            ),
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, json={})),
             request_interval=0,
         ) as client:
             with self.assertRaisesRegex(ConfigurationError, "HOME"):

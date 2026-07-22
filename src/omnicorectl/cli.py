@@ -76,7 +76,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--station-name",
-        default=os.getenv("OMNICORE_STATION_NAME", f"omnicorectl@{socket.gethostname()}"),
+        default=os.getenv(
+            "OMNICORE_STATION_NAME", f"omnicorectl@{socket.gethostname()}"
+        ),
         help="RW8 remote Control Station display name for write commands",
     )
     parser.add_argument(
@@ -287,8 +289,11 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
                 "controller restart requires explicit --yes confirmation"
             )
         controller = ControllerService(client)
-        status = controller.status()
-        if not args.allow_running and status.rapid_execution.lower() != "stopped":
+        controller_status = controller.status()
+        if (
+            not args.allow_running
+            and controller_status.rapid_execution.lower() != "stopped"
+        ):
             raise ConfigurationError(
                 "RAPID is not stopped; stop it or explicitly use --allow-running"
             )
@@ -296,8 +301,8 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
         with ControlStationService(client).write_access(
             station, best_effort_release=True
         ):
-            result = controller.warm_restart()
-        print(format_restart_result(result, as_json=args.as_json))
+            restart_result = controller.warm_restart()
+        print(format_restart_result(restart_result, as_json=args.as_json))
     elif command == ("rapid", "tasks"):
         print(format_tasks(RapidService(client).list_tasks(), as_json=args.as_json))
     elif command == ("rapid", "modules"):
@@ -329,7 +334,9 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
         signal = IoService(client).get_signal(args.network, args.device, args.name)
         print(format_signal_details(signal, as_json=args.as_json))
     elif command == ("cfg", "domains"):
-        print(format_cfg_domains(CfgService(client).list_domains(), as_json=args.as_json))
+        print(
+            format_cfg_domains(CfgService(client).list_domains(), as_json=args.as_json)
+        )
     elif command == ("cfg", "types"):
         print(
             format_cfg_types(
@@ -362,28 +369,30 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
         entries = FileService(client).list_directory(args.path)
         print(format_file_entries(entries, as_json=args.as_json))
     elif command == ("file", "download"):
-        result = FileService(client).download_file(
+        download_result = FileService(client).download_file(
             args.remote_path, Path(args.local_path), overwrite=args.force
         )
-        print(format_download_result(result, as_json=args.as_json))
+        print(format_download_result(download_result, as_json=args.as_json))
     elif command == ("file", "upload"):
         files = FileService(client)
         station = _remote_control_station(args)
         with ControlStationService(client).write_access(station):
-            result = files.upload_file(
+            upload_result = files.upload_file(
                 Path(args.local_path), args.remote_path, overwrite=args.force
             )
-        print(format_upload_result(result, as_json=args.as_json))
+        print(format_upload_result(upload_result, as_json=args.as_json))
     elif command == ("file", "delete"):
         if not args.yes:
             raise ConfigurationError("file delete requires explicit --yes confirmation")
         files = FileService(client)
         station = _remote_control_station(args)
         with ControlStationService(client).write_access(station):
-            result = files.delete_file(args.remote_path)
-        print(format_delete_result(result, as_json=args.as_json))
+            delete_result = files.delete_file(args.remote_path)
+        print(format_delete_result(delete_result, as_json=args.as_json))
     elif command == ("backup", "status"):
-        print(format_backup_status(BackupService(client).status(), as_json=args.as_json))
+        print(
+            format_backup_status(BackupService(client).status(), as_json=args.as_json)
+        )
     elif command == ("backup", "create"):
         if not args.allow_running:
             rapid_state = ControllerService(client).status().rapid_execution
@@ -393,17 +402,17 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
                 )
         station = _remote_control_station(args)
         with ControlStationService(client).write_access(station):
-            result = BackupService(client).create(
+            backup_result = BackupService(client).create(
                 args.destination,
                 archive=args.archive,
                 overwrite=args.force,
                 timeout=args.wait_timeout,
                 poll_interval=args.poll_interval,
             )
-        print(format_backup_result(result, as_json=args.as_json))
+        print(format_backup_result(backup_result, as_json=args.as_json))
     elif command == ("controlstation", "status"):
-        status = ControlStationService(client).status()
-        print(format_write_access_status(status, as_json=args.as_json))
+        write_status = ControlStationService(client).status()
+        print(format_write_access_status(write_status, as_json=args.as_json))
     else:
         raise ConfigurationError("unsupported command")
     return 0

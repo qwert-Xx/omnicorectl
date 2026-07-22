@@ -128,15 +128,11 @@ class CliTests(unittest.TestCase):
         parser = build_parser()
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit) as raised:
-                parser.parse_args(
-                    ["--timeout", "0", "controller", "status"]
-                )
+                parser.parse_args(["--timeout", "0", "controller", "status"])
         self.assertEqual(raised.exception.code, 2)
 
     def test_backup_create_uses_safe_defaults(self) -> None:
-        args = build_parser().parse_args(
-            ["backup", "create", "$TEMP/nightly"]
-        )
+        args = build_parser().parse_args(["backup", "create", "$TEMP/nightly"])
         self.assertTrue(args.archive)
         self.assertFalse(args.force)
         self.assertFalse(args.allow_running)
@@ -248,7 +244,9 @@ class CliTests(unittest.TestCase):
 
     def test_cfg_instances_table_and_json(self) -> None:
         instances = [
-            CfgInstance("EIO", "EIO_SIGNAL", "Signal1", "10", False, {"Name": "Signal1"})
+            CfgInstance(
+                "EIO", "EIO_SIGNAL", "Signal1", "10", False, {"Name": "Signal1"}
+            )
         ]
         table = format_cfg_instances(instances, as_json=False)
         self.assertIn("INSTANCE ID", table)

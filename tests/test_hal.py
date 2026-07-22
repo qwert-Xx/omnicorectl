@@ -31,7 +31,13 @@ class HalParserTests(unittest.TestCase):
         self.assertEqual(state_resources({"state": []}, resource="test"), [])
 
     def test_required_int_strips_controller_whitespace(self) -> None:
-        self.assertEqual(required_int({"count": " 421455 "}, "count", resource="test"), 421455)
+        self.assertEqual(
+            required_int({"count": " 421455 "}, "count", resource="test"), 421455
+        )
+
+    def test_required_int_rejects_float_instead_of_truncating(self) -> None:
+        with self.assertRaises(ProtocolError):
+            required_int({"count": 1.5}, "count", resource="test")
 
     def test_has_next_link_validates_hal_shape(self) -> None:
         self.assertTrue(

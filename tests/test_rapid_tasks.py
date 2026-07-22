@@ -93,8 +93,12 @@ class RapidTasksTests(unittest.TestCase):
         ) as client:
             modules = RapidService(client).list_modules("T_ROB1")
 
-        self.assertEqual([module.name for module in modules], ["BASE", "EGM_StreamMotion"])
-        self.assertEqual([module.module_type for module in modules], ["SysMod", "ProgMod"])
+        self.assertEqual(
+            [module.name for module in modules], ["BASE", "EGM_StreamMotion"]
+        )
+        self.assertEqual(
+            [module.module_type for module in modules], ["SysMod", "ProgMod"]
+        )
 
     def test_reads_module_source_without_changing_text(self) -> None:
         source_text = "MODULE TestModule\n    ! keep whitespace\nENDMODULE\n"

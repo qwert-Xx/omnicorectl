@@ -30,9 +30,7 @@ class ControlStationTests(unittest.TestCase):
         def handler(request: httpx.Request) -> httpx.Response:
             if request.url.path == "/logout":
                 return httpx.Response(200, json={})
-            self.assertEqual(
-                request.url.path, "/rw/controlstation/writeaccess/status"
-            )
+            self.assertEqual(request.url.path, "/rw/controlstation/writeaccess/status")
             return httpx.Response(200, json=payload)
 
         with RwsClient(
@@ -88,9 +86,7 @@ class ControlStationTests(unittest.TestCase):
             request_interval=0,
         ) as client:
             service = ControlStationService(client)
-            station = RemoteControlStation(
-                "omnicorectl tests", station_id, "483921"
-            )
+            station = RemoteControlStation("omnicorectl tests", station_id, "483921")
             with self.assertRaisesRegex(RuntimeError, "operation failed"):
                 with service.write_access(station) as status:
                     self.assertTrue(status.held)

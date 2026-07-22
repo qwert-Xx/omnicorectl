@@ -36,9 +36,7 @@ class RwsClientErrorTests(unittest.TestCase):
         error = raised.exception
         self.assertEqual(error.status_code, 400)
         self.assertEqual(error.controller_code, "-20103")
-        self.assertEqual(
-            error.controller_message, "Control station id not allowed"
-        )
+        self.assertEqual(error.controller_message, "Control station id not allowed")
         self.assertIn("ABB -20103", str(error))
 
     def test_includes_xhtml_detail_in_authorization_error(self) -> None:

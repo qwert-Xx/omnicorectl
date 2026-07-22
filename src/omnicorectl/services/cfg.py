@@ -103,9 +103,7 @@ class CfgService:
                 return instances
             start += page_size
 
-    def get_instance(
-        self, domain: str, cfg_type: str, instance: str
-    ) -> CfgInstance:
+    def get_instance(self, domain: str, cfg_type: str, instance: str) -> CfgInstance:
         path = "/rw/cfg/{}/{}/instances/{}".format(
             quote(domain, safe=""),
             quote(cfg_type, safe=""),
@@ -207,9 +205,7 @@ class CfgService:
     ) -> None:
         self._client.post_form(endpoint, {attribute: f"[{value},{element_count}]"})
 
-    def _validate_instance(
-        self, domain: str, cfg_type: str, instance: str
-    ) -> None:
+    def _validate_instance(self, domain: str, cfg_type: str, instance: str) -> None:
         payload = self._client.post_form_optional_json(
             "/rw/cfg/validate-instances",
             {
@@ -240,9 +236,7 @@ def _instance_endpoint(domain: str, cfg_type: str, instance: str) -> str:
     )
 
 
-def _parse_instance(
-    item: dict[str, object], domain: str, cfg_type: str
-) -> CfgInstance:
+def _parse_instance(item: dict[str, object], domain: str, cfg_type: str) -> CfgInstance:
     attributes_raw = item.get("attrib")
     if not isinstance(attributes_raw, list):
         raise ProtocolError("CFG instance: attributes is not a list")
@@ -253,9 +247,7 @@ def _parse_instance(
         if attribute.get("_type") != "cfg-ia-t":
             continue
         key = required_text(attribute, "_title", resource="CFG attribute")
-        attributes[key] = required_string(
-            attribute, "value", resource="CFG attribute"
-        )
+        attributes[key] = required_string(attribute, "value", resource="CFG attribute")
 
     raw_instance_id = item.get("instanceid")
     if isinstance(raw_instance_id, bool) or not isinstance(raw_instance_id, (str, int)):
