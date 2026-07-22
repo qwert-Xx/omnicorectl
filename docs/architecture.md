@@ -96,40 +96,41 @@ one bounded session and closes it deterministically.
 
 ```text
 CLI commands
-    -> application services (controller, rapid, io, cfg, backup)
+    -> application services (controller, rapid, io, cfg, files, backup)
         -> RWS endpoint client and HAL/XHTML parsers
             -> HTTP transport/session
                 -> OmniCore controller
 ```
 
-Planned package layout:
+Current package layout:
 
 ```text
 src/omnicorectl/
   cli.py                 argument parsing, exit codes, output selection
-  config.py              environment/profile resolution, no stored passwords
   errors.py              stable user-facing exception hierarchy
   output.py              table, JSON, and raw output
   rws/
-    transport.py         HTTPS, Basic auth, cookies, timeout, rate limit
     hal.py               tolerant HAL+JSON parsing
-    xhtml.py             fallback/error parsing
-    client.py            generic request boundary and error translation
+    client.py            HTTPS session, throttling, streaming, HAL/XHTML errors
   services/
     controller.py        status and controller lifecycle
-    rapid.py             tasks, modules, source, execution
+    rapid.py             tasks, modules, and source
     io.py                networks, devices, signals
-    cfg.py               configuration database
+    cfg.py               configuration reads, guarded updates, validation
     control_station.py   RW8 registration/write-access context manager
-    backup.py            async backup lifecycle and download
+    files.py             streamed file operations and path guards
+    backup.py            asynchronous backup lifecycle
 ```
 
-The layout is evolutionary: directories are created when the first real module
-needs them, not as empty placeholders.
+Configuration resolution remains small enough to stay in `cli.py`; the HTTPS
+transport and error-body parsing share one session boundary in `rws/client.py`.
+They should only be split when either gains an independent consumer. This keeps
+the original layering without empty modules or pass-through abstractions.
 
 ## Command contract
 
-- Nouns form command groups: `controller`, `rapid`, `io`, `cfg`, `backup`.
+- Nouns form command groups: `controller`, `rapid`, `io`, `cfg`, `file`,
+  `backup`, `controlstation`.
 - Verbs describe one operation: `status`, `list`, `get`, `set`, `create`.
 - Read commands default to concise human output and support `--json`.
 - Commands that return source or file bytes write raw data to stdout or an
@@ -169,8 +170,8 @@ Every feature commit must include, as applicable:
    Git.
 
 Live tests are not part of the default unit suite because they require physical
-hardware. Their exact command and observed RobotWare version are recorded in the
-commit or development notes.
+hardware. Their sanitized results and observed RobotWare version are recorded
+in [`live-validation.md`](live-validation.md).
 
 ## Deferred decisions
 

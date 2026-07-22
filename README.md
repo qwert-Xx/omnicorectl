@@ -101,5 +101,17 @@ The architecture and incremental development rules are documented in
 - TLS verification is enabled by default. Controllers with the factory
   self-signed certificate require an explicit `--insecure` option.
 - Proxy environment variables are ignored for controller traffic.
-- Mutating commands will be visually distinct from read-only commands and will
-  use explicit write-access lifecycles.
+- Mutating commands use a bounded Control Station write-access lifecycle.
+  Destructive operations require explicit confirmation, file operations use
+  path/existence guards, and CFG writes use validation plus readback/rollback.
+
+## Development verification
+
+```bash
+.venv/bin/python -m unittest discover -v
+.venv/bin/python -m compileall -q src tests
+.venv/bin/python -m pip wheel --no-deps . --wheel-dir /tmp/omnicorectl-wheel
+```
+
+Sanitized checks against the RW 8.1 controller are recorded in
+[`docs/live-validation.md`](docs/live-validation.md).
