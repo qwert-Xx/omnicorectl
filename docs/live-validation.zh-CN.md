@@ -1,0 +1,67 @@
+# 实机控制器验证
+
+[English](live-validation.md) | 简体中文
+
+本文记录不进入确定性单元测试套件的脱敏集成证据，不包含密码、PIN、Cookie 或备份
+内容。
+
+## 目标
+
+- 验证日期：2026-07-22 和 2026-07-23
+- 控制器：真实 OmniCore V250XT
+- RobotWare：`8.1.0+600`
+- RWS 端点：控制器 HTTPS 服务端口
+- 表示形式：`application/hal+json;v=2.0`
+
+## 只读覆盖
+
+已安装的 CLI 成功读取：
+
+- 控制器身份、操作模式、控制器状态和 RAPID 状态；
+- RAPID 任务、模块清单和模块源码；
+- I/O 网络、设备、信号清单和详细信号状态；
+- CFG 域、类型、实例和属性；
+- 文件目录与文件、备份状态和控制站状态。
+
+完成前检查观察到 RAPID 已停止、备份状态为 `Backup Ready`、外部控制已启用，且没有
+控制站持有写权限；审计期间控制器处于急停状态。
+
+## 可逆文件写入
+
+一个唯一的 `$TEMP` 探针验证了以下流程：
+
+1. 注册远程控制站；
+2. 获取并验证有界写权限；
+3. 将 `README.md` 作为二进制数据上传；
+4. 释放权限；
+5. 通过另一次 CLI 调用下载；
+6. 逐字节比较 SHA-256；
+7. 重新获取权限、删除并确认不存在；
+8. 验证最终状态为 `held=false`、持有者为 `none`。
+
+增加普通文件删除保护后，完成审计再次执行了该流程。4,806 字节探针通过上传、下载、
+哈希比较、父路径预检、类型验证、删除和不存在性验证，其 SHA-256 为
+`94d05228aff4f9d3de5725b91c8b94b229cc3e5b34fc5822ff15213085c101eb`。
+
+## CFG 与 EtherCAT I/O
+
+CFG 创建工作流创建并校验了两个外部信号，以及 Cross Data 和 Transfer Data 实例；
+普通暖启动使其生效：
+
+| 类型 | 实例 | 映射 |
+|---|---|---|
+| `EIO_SIGNAL` | `EtherCAT_DI` | DI，`EC_Internal_Device`，输入位 0 |
+| `EIO_SIGNAL` | `EtherCAT_DO` | DO，`EC_Internal_Device`，输出位 0 |
+| `EIO_CROSS` | `EtherCAT_CrossLoopback` | `EtherCAT_DI` → `EtherCAT_DO` |
+| `EIO_DEVICE_TRANSFER_DATA` | `EtherCAT_RawLoopback` | 输入位 8–15 → 输出位 8–15 |
+
+官方 SOEM v2.0.0 主站通过 `ens6f3` 连接 `ECAT IN (X1)`。从站以 64 字节输入/
+输出 PDO 进入 OP。模式 `00`、`55`、`AA`、`FF`、`A5`、`5A` 在两条路径上全部
+通过，WKC 始终为 `3/3`。测试退出时清零输出并请求 SAFE-OP/INIT；随后 RWS 报告
+两个信号均为零，状态为 `valid/good`。
+
+## 控制站传输细节
+
+RW `8.1.0+600` 要求 `control-station-id` 带花括号，例如
+`{12345678-1234-5678-9abc-123456789abc}`。不带花括号的 UUID 返回 HTTP 400
+和 ABB 错误码 `-20103`；CLI 会把 UUID 输入规范化为所需形式。
