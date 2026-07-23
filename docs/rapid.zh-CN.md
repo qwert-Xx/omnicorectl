@@ -117,6 +117,11 @@ omnicorectl rapid breakpoint clear T_ROB1 MainModule 12 3 --yes
 omnicorectl rapid breakpoint clear T_ROB1 --all --yes
 ```
 
+在 RobotWare 8.1 上，`rapid start` 会在写权限作用域内临时启用并回读确认控制站
+Motion Control。启动请求结束后，即使请求失败，也会再次关闭并确认 Motion Control。
+已认证用户仍需具备相应的 RAPID 执行权限和自动模式远程启停权限，控制器也必须已启用
+外部控制。
+
 `modify-position` 使用机器人的当前位置更新运动目标，并有额外的 RobotWare 前置条件。
 `write`、`edit` 或 `deploy` 绝不会隐式调用它。
 

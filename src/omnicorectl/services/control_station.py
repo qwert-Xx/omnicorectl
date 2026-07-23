@@ -54,6 +54,60 @@ class ControlStationService:
     def __init__(self, client: RwsClient) -> None:
         self._client = client
 
+    def motion_control_enabled(self) -> bool:
+        state = first_state(
+            self._client.get_json("/rw/controlstation/allowmotioncontrol"),
+            resource="Control Station motion control",
+        )
+        return required_bool(
+            state,
+            "is-enabled",
+            resource="Control Station motion control",
+        )
+
+    def set_motion_control(self, enabled: bool) -> None:
+        """Set Motion Control and verify the controller accepted the state.
+
+        设置 Motion Control，并回读确认控制器已接受该状态。
+        """
+
+        self._client.post_form(
+            "/rw/controlstation/allowmotioncontrol",
+            {"allow-motion-control": "true" if enabled else "false"},
+        )
+        actual = self.motion_control_enabled()
+        if actual != enabled:
+            expected = "enabled" if enabled else "disabled"
+            actual_text = "enabled" if actual else "disabled"
+            raise ProtocolError(
+                "Control Station motion control was not "
+                f"{expected}; controller reports {actual_text}"
+            )
+
+    @contextmanager
+    def motion_control(self) -> Iterator[None]:
+        """Enable Motion Control for one operation and always disable it.
+
+        仅在一个操作期间启用 Motion Control，并始终将其关闭。
+        """
+
+        failed = False
+        try:
+            self.set_motion_control(True)
+            yield
+        except BaseException:
+            failed = True
+            raise
+        finally:
+            try:
+                self.set_motion_control(False)
+            except OmnicoreError:
+                # Preserve the original operation/enable failure. If the protected
+                # operation succeeded, a disable failure must still fail the command.
+                # 保留原始操作或启用错误；若受保护操作成功，则关闭失败必须使命令失败。
+                if not failed:
+                    raise
+
     def status(self) -> WriteAccessStatus:
         state = first_state(
             self._client.get_json("/rw/controlstation/writeaccess/status"),

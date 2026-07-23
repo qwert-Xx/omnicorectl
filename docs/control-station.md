@@ -35,3 +35,22 @@ verifies both the enabled flag and holder UUID before running the operation.
 Unit tests deliberately raise inside the protected block and assert that release
 is still the next RWS call. The acquire/verify/release sequence has also been
 verified against the connected real controller.
+
+## Motion Control for RAPID start
+
+RobotWare 8.1 also requires a remote Control Station to enable Motion Control
+before it can start RAPID execution that may move the robot. `rapid start`
+performs the following additional sequence while the same station still holds
+write access:
+
+1. POST `allow-motion-control=true` to
+   `/rw/controlstation/allowmotioncontrol`.
+2. Read the resource back and require `is-enabled=true`.
+3. Send the RAPID start request.
+4. In `finally`, POST `allow-motion-control=false` and require
+   `is-enabled=false`.
+
+The disable step therefore runs when RAPID start is accepted, rejected, or
+raises a protocol error. A disable failure is reported if the start operation
+itself succeeded. `rapid stop` and program-pointer reset do not enable Motion
+Control.

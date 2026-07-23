@@ -658,12 +658,13 @@ def _dispatch_execution(
     _ensure_yes(args)
     with _write_access(client, station_factory):
         if args.command == "start":
-            result = debug.start_execution(
-                execution_mode=args.mode,
-                cycle=args.cycle,
-                stop_at_breakpoint=not args.ignore_breakpoints,
-                all_tasks_by_task_panel=args.all_tasks,
-            )
+            with ControlStationService(client).motion_control():
+                result = debug.start_execution(
+                    execution_mode=args.mode,
+                    cycle=args.cycle,
+                    stop_at_breakpoint=not args.ignore_breakpoints,
+                    all_tasks_by_task_panel=args.all_tasks,
+                )
         elif args.command == "stop":
             result = debug.stop_execution(stop_mode=args.mode, all_tasks=args.all_tasks)
         else:

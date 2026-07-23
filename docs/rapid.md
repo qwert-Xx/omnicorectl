@@ -122,6 +122,12 @@ omnicorectl rapid breakpoint clear T_ROB1 MainModule 12 3 --yes
 omnicorectl rapid breakpoint clear T_ROB1 --all --yes
 ```
 
+On RobotWare 8.1, `rapid start` temporarily enables and verifies Control
+Station Motion Control inside the write-access scope. It always disables and
+verifies Motion Control again after the start request, including when that
+request fails. The authenticated user still needs the relevant RAPID execution
+and remote start/stop grants, and external control must be enabled.
+
 `modify-position` updates a motion target from the robot's current position and
 has additional RobotWare preconditions. It is intentionally never invoked by
 `write`, `edit`, or `deploy`.

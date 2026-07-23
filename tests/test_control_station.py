@@ -6,7 +6,7 @@ from urllib.parse import parse_qs
 import httpx
 
 from omnicorectl.rws import RwsClient
-from omnicorectl.errors import ConfigurationError
+from omnicorectl.errors import ConfigurationError, ProtocolError
 from omnicorectl.services.control_station import (
     ControlStationService,
     RemoteControlStation,
@@ -14,6 +14,86 @@ from omnicorectl.services.control_station import (
 
 
 class ControlStationTests(unittest.TestCase):
+    def test_motion_control_scope_verifies_state_and_disables_after_failure(
+        self,
+    ) -> None:
+        enabled = False
+        calls: list[tuple[str, str]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal enabled
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            calls.append((request.method, request.url.path))
+            self.assertEqual(request.url.path, "/rw/controlstation/allowmotioncontrol")
+            if request.method == "POST":
+                form = parse_qs(request.content.decode())
+                enabled = form["allow-motion-control"] == ["true"]
+                return httpx.Response(204)
+            return httpx.Response(
+                200,
+                json={"state": [{"is-enabled": "true" if enabled else "false"}]},
+            )
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            service = ControlStationService(client)
+            with self.assertRaisesRegex(RuntimeError, "start failed"):
+                with service.motion_control():
+                    self.assertTrue(service.motion_control_enabled())
+                    raise RuntimeError("start failed")
+
+        self.assertFalse(enabled)
+        self.assertEqual(
+            calls,
+            [
+                ("POST", "/rw/controlstation/allowmotioncontrol"),
+                ("GET", "/rw/controlstation/allowmotioncontrol"),
+                ("GET", "/rw/controlstation/allowmotioncontrol"),
+                ("POST", "/rw/controlstation/allowmotioncontrol"),
+                ("GET", "/rw/controlstation/allowmotioncontrol"),
+            ],
+        )
+
+    def test_motion_control_scope_rejects_unconfirmed_enable_and_disables(
+        self,
+    ) -> None:
+        forms: list[dict[str, list[str]]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            if request.method == "POST":
+                forms.append(parse_qs(request.content.decode()))
+                return httpx.Response(204)
+            return httpx.Response(200, json={"state": [{"is-enabled": "false"}]})
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            with self.assertRaisesRegex(
+                ProtocolError, "motion control was not enabled"
+            ):
+                with ControlStationService(client).motion_control():
+                    self.fail("unverified Motion Control must not enter the scope")
+
+        self.assertEqual(
+            forms,
+            [
+                {"allow-motion-control": ["true"]},
+                {"allow-motion-control": ["false"]},
+            ],
+        )
+
     def test_reads_write_access_status(self) -> None:
         payload = {
             "state": [
