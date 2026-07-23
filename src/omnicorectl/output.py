@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Sequence
-from dataclasses import asdict
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from omnicorectl.services.backup import BackupResult, BackupStatus
@@ -29,7 +29,25 @@ from omnicorectl.services.files import (
     UploadResult,
 )
 from omnicorectl.services.io import IoDevice, IoNetwork, IoSignal, IoSignalDetails
-from omnicorectl.services.rapid import ModuleSource, RapidModule, RapidTask
+from omnicorectl.services.rapid import (
+    BuildError,
+    ModuleAttributes,
+    ModuleSource,
+    RapidAction,
+    RapidModule,
+    RapidTask,
+)
+from omnicorectl.services.rapid_debug import (
+    Breakpoint,
+    ProgramPointer,
+    RapidExecutionState,
+    RapidSymbol,
+    RapidSymbolData,
+)
+from omnicorectl.services.rapid_editing import (
+    ModuleDeployResult,
+    ModuleWriteResult,
+)
 
 
 def format_status(status: ControllerStatus, *, as_json: bool) -> str:
@@ -97,6 +115,171 @@ def write_source(module: ModuleSource, *, as_json: bool) -> None:
     sys.stdout.write(module.source)
     if not module.source.endswith("\n"):
         sys.stdout.write("\n")
+
+
+def format_module_attributes(attributes: ModuleAttributes, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(attributes)
+    return "\n".join(
+        (
+            f"Module:      {attributes.task}/{attributes.module}",
+            f"File:        {attributes.filename or '-'}",
+            f"Attributes:  {', '.join(attributes.attributes) or '-'}",
+            f"Read only:   {_yes_no(attributes.read_only)}",
+        )
+    )
+
+
+def format_rapid_action(action: RapidAction, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(action)
+    return f"RAPID {action.action} accepted: {action.task} {action.target}"
+
+
+def format_build_errors(errors: list[BuildError], *, as_json: bool) -> str:
+    if as_json:
+        return _json_list(errors)
+    if not errors:
+        return "No RAPID build errors."
+    return _format_table(
+        ("MODULE", "ROW", "COLUMN", "NUMBER", "ERROR"),
+        [
+            (
+                error.module,
+                str(error.row),
+                str(error.column),
+                error.error_number or "-",
+                error.message,
+            )
+            for error in errors
+        ],
+    )
+
+
+def format_module_write(result: ModuleWriteResult, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(result)
+    if not result.changed:
+        return (
+            f"RAPID module unchanged: {result.task}/{result.module} "
+            f"(change count {result.change_count_before})"
+        )
+    return "\n".join(
+        (
+            f"RAPID module updated: {result.task}/{result.module}",
+            f"Declared module:     {result.declared_module}",
+            f"Change count:        {result.change_count_before} -> "
+            f"{result.change_count_after}",
+            f"Controller build:    {'passed' if result.built else 'not requested'}",
+        )
+    )
+
+
+def format_module_deploy(result: ModuleDeployResult, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(result)
+    return "\n".join(
+        (
+            f"RAPID module deployed: {result.task}/{result.module}",
+            f"Local file:           {result.local_path}",
+            f"Controller file:      {result.remote_path}",
+            f"Uploaded bytes:       {result.uploaded_bytes}",
+            f"Replaced:             {_yes_no(result.replaced)}",
+            f"Controller build:     {'passed' if result.built else 'not requested'}",
+            f"Upload removed:       {_yes_no(result.upload_removed)}",
+        )
+    )
+
+
+def format_execution_state(state: RapidExecutionState, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(state)
+    return "\n".join(
+        (
+            f"RAPID state:    {state.state}",
+            f"Cycle:          {state.cycle}",
+            f"Hold to run:    {'-' if state.hold_to_run is None else _yes_no(state.hold_to_run)}",
+        )
+    )
+
+
+def format_program_pointers(pointers: list[ProgramPointer], *, as_json: bool) -> str:
+    if as_json:
+        return _json_list(pointers)
+    if not pointers:
+        return "No RAPID program pointers found."
+    return _format_table(
+        ("KIND", "MODULE", "ROUTINE", "BEGIN", "END", "EXECUTION"),
+        [
+            (
+                pointer.kind,
+                pointer.module or "-",
+                pointer.routine or "-",
+                f"{pointer.begin_row}:{pointer.begin_column}",
+                f"{pointer.end_row}:{pointer.end_column}",
+                pointer.execution_type or "-",
+            )
+            for pointer in pointers
+        ],
+    )
+
+
+def format_breakpoints(breakpoints: list[Breakpoint], *, as_json: bool) -> str:
+    if as_json:
+        return _json_list(breakpoints)
+    if not breakpoints:
+        return "No RAPID breakpoints found."
+    return _format_table(
+        ("MODULE", "START", "END"),
+        [
+            (
+                point.module,
+                f"{point.start_row}:{point.start_column}",
+                f"{point.end_row}:{point.end_column}",
+            )
+            for point in breakpoints
+        ],
+    )
+
+
+def format_symbols(symbols: list[RapidSymbol], *, as_json: bool) -> str:
+    if as_json:
+        return _json_list(symbols)
+    if not symbols:
+        return "No RAPID symbols found."
+    return _format_table(
+        ("NAME", "SYMBOL TYPE", "DATA TYPE", "READ ONLY", "URL"),
+        [
+            (
+                symbol.name,
+                symbol.symbol_type,
+                symbol.data_type or "-",
+                _yes_no(symbol.read_only),
+                symbol.url,
+            )
+            for symbol in symbols
+        ],
+    )
+
+
+def format_symbol_data(data: RapidSymbolData, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(data)
+    return "\n".join((f"Symbol:  {data.url}", f"Value:   {data.value}"))
+
+
+def format_rapid_data(value: Any, *, as_json: bool) -> str:
+    """Render uncommon RAPID records without hiding machine-readable fields.
+
+    渲染低频 RAPID 记录，同时保留机器可读字段。
+    """
+
+    if as_json:
+        return json.dumps(_plain_data(value), indent=2, ensure_ascii=False)
+    plain = _plain_data(value)
+    if isinstance(plain, dict):
+        return "\n".join(f"{key}: {item}" for key, item in plain.items())
+    return str(plain)
 
 
 def format_networks(networks: list[IoNetwork], *, as_json: bool) -> str:
@@ -365,6 +548,16 @@ def _json_list(values: Sequence[Any]) -> str:
         indent=2,
         ensure_ascii=False,
     )
+
+
+def _plain_data(value: Any) -> Any:
+    if is_dataclass(value) and not isinstance(value, type):
+        return asdict(value)
+    if isinstance(value, (list, tuple)):
+        return [_plain_data(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _plain_data(item) for key, item in value.items()}
+    return value
 
 
 def _yes_no(value: bool) -> str:

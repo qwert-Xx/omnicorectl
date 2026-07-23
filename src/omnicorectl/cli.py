@@ -36,16 +36,18 @@ from omnicorectl.output import (
     format_devices,
     format_download_result,
     format_file_entries,
-    format_modules,
     format_networks,
     format_restart_result,
     format_signal_details,
     format_signals,
     format_status,
-    format_tasks,
     format_upload_result,
     format_write_access_status,
-    write_source,
+)
+from omnicorectl.rapid_cli import (
+    add_rapid_commands,
+    dispatch_local_rapid,
+    dispatch_rapid,
 )
 from omnicorectl.rws import RwsClient
 from omnicorectl.services.backup import BackupService
@@ -57,7 +59,6 @@ from omnicorectl.services.control_station import (
 )
 from omnicorectl.services.files import FileService
 from omnicorectl.services.io import IoService
-from omnicorectl.services.rapid import RapidService
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -144,34 +145,7 @@ def _add_controller_commands(groups: argparse._SubParsersAction) -> None:
 
 
 def _add_rapid_commands(groups: argparse._SubParsersAction) -> None:
-    rapid = groups.add_parser(
-        "rapid", help="RAPID program information / RAPID 程序信息"
-    )
-    commands = rapid.add_subparsers(dest="command", required=True)
-    tasks = commands.add_parser("tasks", help="list RAPID tasks / 列出 RAPID 任务")
-    tasks.add_argument(
-        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
-    )
-    modules = commands.add_parser(
-        "modules", help="list modules in a RAPID task / 列出 RAPID 任务中的模块"
-    )
-    modules.add_argument(
-        "task", help="RAPID task name, for example T_ROB1 / RAPID 任务名，例如 T_ROB1"
-    )
-    modules.add_argument(
-        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
-    )
-    read = commands.add_parser(
-        "read",
-        help="write RAPID module source to stdout / 将 RAPID 模块源码写到标准输出",
-    )
-    read.add_argument(
-        "task", help="RAPID task name, for example T_ROB1 / RAPID 任务名，例如 T_ROB1"
-    )
-    read.add_argument("module", help="RAPID module name / RAPID 模块名")
-    read.add_argument(
-        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
-    )
+    add_rapid_commands(groups)
 
 
 def _add_io_commands(groups: argparse._SubParsersAction) -> None:
@@ -427,6 +401,9 @@ def _add_control_station_commands(groups: argparse._SubParsersAction) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        local_result = dispatch_local_rapid(args)
+        if local_result is not None:
+            return local_result
         host = _required(args.host, "--host or OMNICORE_HOST")
         username = _required(args.username, "--username or OMNICORE_USERNAME")
         password = _password()
@@ -452,6 +429,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
     command = (args.group, args.command)
+    if args.group == "rapid":
+        return dispatch_rapid(client, args, lambda: _remote_control_station(args))
     if command == ("controller", "status"):
         print(format_status(ControllerService(client).status(), as_json=args.as_json))
     elif command == ("controller", "restart"):
@@ -474,17 +453,6 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
         ):
             restart_result = controller.warm_restart()
         print(format_restart_result(restart_result, as_json=args.as_json))
-    elif command == ("rapid", "tasks"):
-        print(format_tasks(RapidService(client).list_tasks(), as_json=args.as_json))
-    elif command == ("rapid", "modules"):
-        print(
-            format_modules(
-                RapidService(client).list_modules(args.task), as_json=args.as_json
-            )
-        )
-    elif command == ("rapid", "read"):
-        source = RapidService(client).get_module_source(args.task, args.module)
-        write_source(source, as_json=args.as_json)
     elif command == ("io", "networks"):
         print(format_networks(IoService(client).list_networks(), as_json=args.as_json))
     elif command == ("io", "devices"):

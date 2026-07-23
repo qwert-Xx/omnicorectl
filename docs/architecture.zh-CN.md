@@ -98,6 +98,7 @@ CLI 命令
 ```text
 src/omnicorectl/
   cli.py                 参数解析、退出码、输出选择
+  rapid_cli.py           RAPID 命令树与受保护 CLI 工作流
   errors.py              面向用户的异常层次
   output.py              表格、JSON 与原始输出
   rws/
@@ -105,7 +106,9 @@ src/omnicorectl/
     client.py            HTTPS 会话、节流、流式传输和错误
   services/
     controller.py        状态与生命周期
-    rapid.py             任务、模块与源码
+    rapid.py             源码、模块、程序与任务原语
+    rapid_debug.py       执行、程序指针、断点与符号
+    rapid_editing.py     受检查的编辑、部署、构建与回滚
     io.py                网络、设备与信号
     cfg.py               受保护的配置修改
     control_station.py   RW8 写权限生命周期
@@ -129,6 +132,7 @@ src/omnicorectl/
 - 写权限在 `finally` 中释放，包括错误或中断场景。
 
 已验证的控制站生命周期见 [`control-station.zh-CN.md`](control-station.zh-CN.md)。
+RAPID 编辑事务和命令界面见 [`rapid.zh-CN.md`](rapid.zh-CN.md)。
 
 ```bash
 OMNICORE_PASSWORD=... omnicorectl \

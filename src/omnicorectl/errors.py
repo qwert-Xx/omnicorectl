@@ -28,6 +28,21 @@ class ProtocolError(OmnicoreError):
     """The controller returned an unexpected RWS payload. / 控制器返回了异常 RWS 数据。"""
 
 
+class RapidBuildError(OmnicoreError):
+    """A RAPID edit produced controller build errors. / RAPID 编辑产生了控制器构建错误。"""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        diagnostics: tuple[str, ...],
+        rolled_back: bool,
+    ) -> None:
+        super().__init__(message)
+        self.diagnostics = diagnostics
+        self.rolled_back = rolled_back
+
+
 class RwsHttpError(OmnicoreError):
     """RWS returned an unsuccessful HTTP response. / RWS 返回了失败的 HTTP 响应。"""
 

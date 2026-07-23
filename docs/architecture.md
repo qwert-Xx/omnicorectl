@@ -112,6 +112,7 @@ Current package layout:
 ```text
 src/omnicorectl/
   cli.py                 argument parsing, exit codes, output selection
+  rapid_cli.py           RAPID command tree and guarded CLI workflows
   errors.py              user-facing exception hierarchy
   output.py              table, JSON, and raw output
   rws/
@@ -119,7 +120,9 @@ src/omnicorectl/
     client.py            HTTPS session, throttling, streaming, errors
   services/
     controller.py        status and lifecycle
-    rapid.py             tasks, modules, and source
+    rapid.py             source, module, program, and task primitives
+    rapid_debug.py       execution, pointers, breakpoints, and symbols
+    rapid_editing.py     checked editing, deployment, build, and rollback
     io.py                networks, devices, signals
     cfg.py               guarded configuration mutation
     control_station.py   RW8 write-access lifecycle
@@ -147,6 +150,8 @@ consumer appears, avoiding empty modules and pass-through abstractions.
 
 The verified Control Station lifecycle is documented in
 [`control-station.md`](control-station.md).
+The RAPID editing transaction and command surface are documented in
+[`rapid.md`](rapid.md).
 
 ```bash
 OMNICORE_PASSWORD=... omnicorectl \

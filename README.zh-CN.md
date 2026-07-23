@@ -37,6 +37,21 @@ export OMNICORE_CONTROL_STATION_PIN='set-a-numeric-pin'
 .venv/bin/omnicorectl --insecure rapid read T_ROB1 EGM_StreamMotion
 .venv/bin/omnicorectl --insecure rapid read T_ROB1 EGM_StreamMotion > EGM_StreamMotion.mod
 
+# 校验并预览整模块更新，不写入控制器。
+.venv/bin/omnicorectl --insecure rapid write \
+  T_ROB1 EGM_StreamMotion ./EGM_StreamMotion.mod --dry-run
+
+# 写入、构建和检查诊断；构建失败时默认自动恢复。
+.venv/bin/omnicorectl --insecure rapid write \
+  T_ROB1 EGM_StreamMotion ./EGM_StreamMotion.mod --yes
+
+# 在 $EDITOR 中编辑控制器模块，并使用相同的受保护流程。
+.venv/bin/omnicorectl --insecure rapid edit T_ROB1 EGM_StreamMotion --yes
+
+# 上传、替换、构建、验证并删除暂存文件。
+.venv/bin/omnicorectl --insecure rapid deploy \
+  T_ROB1 ./EGM_StreamMotion.mod --replace --yes
+
 # 浏览 I/O 网络、设备和信号。
 .venv/bin/omnicorectl --insecure io networks
 .venv/bin/omnicorectl --insecure io devices EtherCAT
@@ -94,6 +109,8 @@ export OMNICORE_CONTROL_STATION_PIN='set-a-numeric-pin'
 全局连接选项必须写在命令组之前。`--host` 和 `--username` 会覆盖对应的环境变量。
 
 架构与增量开发规则见 [`docs/architecture.zh-CN.md`](docs/architecture.zh-CN.md)。
+完整的 RAPID 编辑与调试命令参考见
+[`docs/rapid.zh-CN.md`](docs/rapid.zh-CN.md)。
 
 ## 安全规则
 
@@ -102,6 +119,8 @@ export OMNICORE_CONTROL_STATION_PIN='set-a-numeric-pin'
 - 控制器流量忽略代理环境变量。
 - 修改命令只在有界的控制站生命周期内持有写权限。破坏性操作需要确认，文件与
   CFG 写入按需执行保护、校验、回读或回滚。
+- RAPID 源码写入默认使用 change count 并发检查、隐式 RAPID Mastership、控制器端
+  构建诊断和失败回滚。
 
 ## 开发验证
 

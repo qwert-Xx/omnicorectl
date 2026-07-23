@@ -18,7 +18,9 @@ unit suite. It contains no passwords, PINs, cookies, or backup contents.
 The installed CLI successfully read:
 
 - controller identity, operation mode, controller state, and RAPID state;
-- RAPID tasks, module inventory, and module source;
+- RAPID tasks, module inventory, module source, execution state, module
+  attributes and dimensions, source ranges, text search, build diagnostics,
+  SyncPers status, breakpoints, symbols, and online symbol data;
 - I/O networks, devices, signal inventory, and detailed signal state;
 - CFG domains, types, instances, and attributes;
 - file directories and files, backup state, and Control Station status.
@@ -26,6 +28,13 @@ The installed CLI successfully read:
 The completion preflight observed RAPID stopped, backup state `Backup Ready`,
 external control enabled, and no station holding write access. The controller
 was in emergency stop during the audit.
+
+The expanded RAPID read/debug surface was rechecked on 2026-07-23. The RW8.1
+controller uses `cycle` in the execution-state payload, spells source-position
+columns as `begin-coloumn`/`end-coloumn`, and returns nested error links when no
+program pointer exists. Compatibility handling and sanitized fixtures cover all
+three shapes. No execution start, program-pointer movement, target modification,
+or robot motion was performed during this read-only validation.
 
 ## Reversible file write
 
@@ -44,6 +53,25 @@ The completion audit repeated the workflow after adding the ordinary-file delete
 guard. A 4,806-byte probe passed upload, download, hash comparison, parent-path
 preflight, type verification, deletion, and absence verification. Its SHA-256 was
 `94d05228aff4f9d3de5725b91c8b94b229cc3e5b34fc5822ff15213085c101eb`.
+
+## Reversible RAPID editing
+
+A temporary module with one never-invoked, non-motion routine exercised the
+complete editing path on 2026-07-23:
+
+1. upload to `$TEMP`, load into `T_ROB1`, link, and confirm no build errors;
+2. read back the exact module source and find its routine through symbol search;
+3. replace the complete module text with a change-count guard;
+4. read back the exact requested text, link, and confirm no build errors;
+5. replace one source range, read it back, link, and confirm no build errors;
+6. read and update a temporary `PERS num`, then verify the online value;
+7. set, list, clear, and re-list a breakpoint on a never-executed assignment;
+8. unload the probe, link again, and verify the original module inventory;
+9. verify the staging upload was removed and Control Station access was released.
+
+The observed change count advanced by one for both the complete write and range
+patch. The probe had no entry point, was never executed, and contained no motion
+instruction. No permanent RAPID or file-system artifact remained afterward.
 
 ## CFG and EtherCAT I/O
 

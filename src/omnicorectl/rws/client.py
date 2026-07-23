@@ -150,7 +150,11 @@ class RwsClient:
         return progress_uri
 
     def post_form_optional_json(
-        self, path: str, data: dict[str, str]
+        self,
+        path: str,
+        data: dict[str, str] | None = None,
+        *,
+        params: dict[str, str] | None = None,
     ) -> dict[str, Any] | None:
         """Submit a form whose success body may be JSON or empty.
 
@@ -160,7 +164,8 @@ class RwsClient:
         response = self._request(
             "POST",
             path,
-            data=data,
+            params=params,
+            data=data or {},
             headers={"Content-Type": FORM_V2},
         )
         if not response.content:

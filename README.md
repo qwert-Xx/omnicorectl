@@ -37,6 +37,21 @@ export OMNICORE_CONTROL_STATION_PIN='set-a-numeric-pin'
 .venv/bin/omnicorectl --insecure rapid read T_ROB1 EGM_StreamMotion
 .venv/bin/omnicorectl --insecure rapid read T_ROB1 EGM_StreamMotion > EGM_StreamMotion.mod
 
+# Validate and preview a complete-module update without writing.
+.venv/bin/omnicorectl --insecure rapid write \
+  T_ROB1 EGM_StreamMotion ./EGM_StreamMotion.mod --dry-run
+
+# Write, build, diagnose, and roll back automatically on build failure.
+.venv/bin/omnicorectl --insecure rapid write \
+  T_ROB1 EGM_StreamMotion ./EGM_StreamMotion.mod --yes
+
+# Open a controller module in $EDITOR with the same guarded workflow.
+.venv/bin/omnicorectl --insecure rapid edit T_ROB1 EGM_StreamMotion --yes
+
+# Upload, replace, build, verify, and remove the staging upload.
+.venv/bin/omnicorectl --insecure rapid deploy \
+  T_ROB1 ./EGM_StreamMotion.mod --replace --yes
+
 # Browse I/O networks, devices, and signals.
 .venv/bin/omnicorectl --insecure io networks
 .venv/bin/omnicorectl --insecure io devices EtherCAT
@@ -96,6 +111,8 @@ Global connection options must precede the command group. `--host` and
 
 Architecture and incremental development rules are documented in
 [`docs/architecture.md`](docs/architecture.md).
+The complete RAPID editing and debugging command reference is in
+[`docs/rapid.md`](docs/rapid.md).
 
 ## Security rules
 
@@ -107,6 +124,8 @@ Architecture and incremental development rules are documented in
 - Mutating commands use a bounded Control Station write-access lifecycle.
   Destructive operations require confirmation; file and CFG writes include
   guards, validation, readback, or rollback as applicable.
+- RAPID source writes use change-count concurrency checks, implicit RAPID
+  Mastership, controller-side build diagnostics, and rollback by default.
 
 ## Development verification
 
