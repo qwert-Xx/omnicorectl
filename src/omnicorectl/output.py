@@ -1,4 +1,7 @@
-"""Human-readable and JSON output rendering, independent of command dispatch."""
+"""Human-readable and JSON rendering, independent of command dispatch.
+
+独立于命令分发的人类可读输出与 JSON 输出渲染。
+"""
 
 from __future__ import annotations
 

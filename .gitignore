@@ -10,6 +10,6 @@ build/
 dist/
 
 # Credentials and machine-local configuration must never be committed.
+# 凭据和本机专用配置绝不能提交到仓库。
 .env
 *.local.toml
-

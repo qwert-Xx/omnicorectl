@@ -1,4 +1,7 @@
-"""Synchronous, session-oriented RWS 2.0 HTTP client."""
+"""Synchronous, session-oriented RWS 2.0 HTTP client.
+
+同步、面向会话的 RWS 2.0 HTTP 客户端。
+"""
 
 from __future__ import annotations
 
@@ -23,7 +26,10 @@ FORM_V2 = "application/x-www-form-urlencoded;v=2.0"
 
 
 class RwsClient:
-    """Own one authenticated RWS session for the duration of a CLI command."""
+    """Own one authenticated RWS session for one CLI command.
+
+    在一条 CLI 命令的生命周期内持有一个已认证的 RWS 会话。
+    """
 
     def __init__(
         self,
@@ -114,7 +120,10 @@ class RwsClient:
         )
 
     def post_form_location(self, path: str, data: dict[str, str]) -> str:
-        """Start an asynchronous form action and return its progress URI."""
+        """Start an asynchronous form action and return its progress URI.
+
+        启动异步表单操作并返回其进度 URI。
+        """
 
         response = self._request(
             "POST",
@@ -143,7 +152,10 @@ class RwsClient:
     def post_form_optional_json(
         self, path: str, data: dict[str, str]
     ) -> dict[str, Any] | None:
-        """Submit a form whose success body may be JSON or empty."""
+        """Submit a form whose success body may be JSON or empty.
+
+        提交成功响应正文可能为 JSON 或空内容的表单。
+        """
 
         response = self._request(
             "POST",
@@ -162,7 +174,10 @@ class RwsClient:
         return payload
 
     def download(self, path: str, destination: BinaryIO) -> int:
-        """Stream a controller resource to an already-open binary destination."""
+        """Stream a controller resource to an open binary destination.
+
+        将控制器资源流式写入已打开的二进制目标。
+        """
 
         self._throttle()
         total = 0
@@ -179,7 +194,10 @@ class RwsClient:
         return total
 
     def upload(self, path: str, source: BinaryIO, *, size: int) -> int:
-        """Stream an open binary source to one controller file resource."""
+        """Stream an open binary source to one controller file resource.
+
+        将已打开的二进制源流式上传为控制器文件资源。
+        """
 
         self._throttle()
         total = 0
@@ -211,7 +229,7 @@ class RwsClient:
         return total
 
     def delete(self, path: str) -> None:
-        """Delete one controller resource."""
+        """Delete one controller resource. / 删除一个控制器资源。"""
 
         self._request("DELETE", path)
 
@@ -221,6 +239,8 @@ class RwsClient:
         # Releasing the server-side session avoids exhausting the controller's
         # finite session pool. Logout is best-effort so it cannot hide the result
         # of the user's command.
+        # 释放服务端会话可避免耗尽控制器有限的会话池。注销采用尽力而为策略，
+        # 因而不会掩盖用户命令本身的执行结果。
         try:
             self._request("GET", "/logout")
         except Exception:
@@ -283,7 +303,10 @@ class RwsClient:
 
 
 def _controller_error(response: httpx.Response) -> tuple[str, str]:
-    """Extract ABB's internal status from RWS JSON or XHTML error bodies."""
+    """Extract ABB status from RWS JSON or XHTML error bodies.
+
+    从 RWS JSON 或 XHTML 错误正文中提取 ABB 内部状态。
+    """
 
     if not response.is_error:
         return "", ""

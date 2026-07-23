@@ -1,4 +1,7 @@
-"""Small, tolerant helpers for ABB's HAL+JSON representations."""
+"""Small, tolerant helpers for ABB HAL+JSON representations.
+
+用于解析 ABB HAL+JSON 表示形式的小型宽容型辅助函数。
+"""
 
 from __future__ import annotations
 
@@ -12,6 +15,7 @@ def first_state(payload: Any, *, resource: str) -> dict[str, Any]:
 
     RWS response schemas are intentionally treated as additive mappings. Unknown
     keys survive parsing, while the minimum shape used by a service is checked.
+    RWS 响应模式被视为可扩展映射：未知键会被保留，同时检查服务所需的最小结构。
     """
 
     state = state_resources(payload, resource=resource)
@@ -21,7 +25,10 @@ def first_state(payload: Any, *, resource: str) -> dict[str, Any]:
 
 
 def state_resources(payload: Any, *, resource: str) -> list[dict[str, Any]]:
-    """Return object entries from an RWS top-level ``state`` list."""
+    """Return objects from an RWS top-level ``state`` list.
+
+    返回 RWS 顶层 ``state`` 列表中的对象条目。
+    """
 
     if not isinstance(payload, dict):
         raise ProtocolError(f"{resource}: expected a JSON object")
@@ -41,7 +48,10 @@ def required_text(state: dict[str, Any], key: str, *, resource: str) -> str:
 
 
 def required_string(state: dict[str, Any], key: str, *, resource: str) -> str:
-    """Read a string field while allowing the empty string as a valid value."""
+    """Read a string field while allowing an empty value.
+
+    读取字符串字段，并允许空字符串作为合法值。
+    """
 
     value = state.get(key)
     if not isinstance(value, str):
@@ -50,7 +60,10 @@ def required_string(state: dict[str, Any], key: str, *, resource: str) -> str:
 
 
 def embedded_resources(payload: Any, *, resource: str) -> list[dict[str, Any]]:
-    """Return object entries from an RWS HAL ``_embedded.resources`` list."""
+    """Return objects from an RWS HAL ``_embedded.resources`` list.
+
+    返回 RWS HAL ``_embedded.resources`` 列表中的对象条目。
+    """
 
     if not isinstance(payload, dict):
         raise ProtocolError(f"{resource}: expected a JSON object")
@@ -85,7 +98,10 @@ def required_int(state: dict[str, Any], key: str, *, resource: str) -> int:
 
 
 def has_next_link(payload: Any, *, resource: str) -> bool:
-    """Return whether an RWS HAL page advertises a following page."""
+    """Return whether an RWS HAL page advertises a following page.
+
+    返回 RWS HAL 页面是否声明了下一页。
+    """
 
     if not isinstance(payload, dict):
         raise ProtocolError(f"{resource}: expected a JSON object")

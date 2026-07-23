@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "omnicorectl"
 version = "0.1.0.dev0"
-description = "Command-line client for ABB OmniCore Robot Web Services 2.0"
+description = "ABB OmniCore RWS 2.0 CLI / ABB OmniCore RWS 2.0 命令行客户端"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

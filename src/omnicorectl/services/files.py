@@ -1,4 +1,4 @@
-"""Controller file-service resources."""
+"""Controller file-service resources. / 控制器文件服务资源。"""
 
 from __future__ import annotations
 

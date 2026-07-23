@@ -1,4 +1,4 @@
-"""Read-only I/O system resources."""
+"""Read-only I/O system resources. / 只读 I/O 系统资源。"""
 
 from __future__ import annotations
 

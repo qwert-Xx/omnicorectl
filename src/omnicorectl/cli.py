@@ -1,4 +1,7 @@
-"""Command-line parsing and dispatch."""
+"""Command-line parsing and dispatch.
+
+命令行参数解析与命令分发。
+"""
 
 from __future__ import annotations
 
@@ -60,33 +63,46 @@ from omnicorectl.services.rapid import RapidService
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="omnicorectl",
-        description="Manage ABB OmniCore controllers through RWS 2.0.",
+        description="Manage ABB OmniCore controllers through RWS 2.0. / "
+        "通过 RWS 2.0 管理 ABB OmniCore 控制器。",
     )
-    parser.add_argument("--host", default=os.getenv("OMNICORE_HOST"))
-    parser.add_argument("--username", default=os.getenv("OMNICORE_USERNAME"))
+    parser.add_argument(
+        "--host",
+        default=os.getenv("OMNICORE_HOST"),
+        help="controller host or URL / 控制器主机名、IP 或 URL",
+    )
+    parser.add_argument(
+        "--username",
+        default=os.getenv("OMNICORE_USERNAME"),
+        help="controller username / 控制器用户名",
+    )
     parser.add_argument(
         "--insecure",
         action="store_true",
         default=_env_flag("OMNICORE_INSECURE"),
-        help="disable TLS certificate verification (required for factory certificates)",
+        help="disable TLS certificate verification; required for factory "
+        "certificates / 禁用 TLS 证书校验；使用出厂证书时需要",
     )
     parser.add_argument(
         "--timeout",
         type=_positive_float,
         default=os.getenv("OMNICORE_TIMEOUT", "10"),
         metavar="SECONDS",
+        help="request timeout in seconds / 请求超时秒数",
     )
     parser.add_argument(
         "--station-name",
         default=os.getenv(
             "OMNICORE_STATION_NAME", f"omnicorectl@{socket.gethostname()}"
         ),
-        help="RW8 remote Control Station display name for write commands",
+        help="RW8 remote Control Station display name for write commands / "
+        "写命令使用的 RW8 远程控制站显示名称",
     )
     parser.add_argument(
         "--station-id",
         default=os.getenv("OMNICORE_STATION_ID"),
-        help="stable Control Station UUID; derived from host and user by default",
+        help="stable Control Station UUID; derived from host and user by default / "
+        "稳定的控制站 UUID；默认由主机和用户推导",
     )
 
     groups = parser.add_subparsers(dest="group", required=True)
@@ -101,182 +117,311 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _add_controller_commands(groups: argparse._SubParsersAction) -> None:
-    controller = groups.add_parser("controller", help="controller information")
+    controller = groups.add_parser(
+        "controller", help="controller information / 控制器信息"
+    )
     commands = controller.add_subparsers(dest="command", required=True)
-    status = commands.add_parser("status", help="show current controller status")
-    status.add_argument("--json", action="store_true", dest="as_json")
-    restart = commands.add_parser("restart", help="request a warm controller restart")
-    restart.add_argument("--yes", action="store_true", help="confirm warm restart")
+    status = commands.add_parser(
+        "status", help="show current controller status / 显示当前控制器状态"
+    )
+    status.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    restart = commands.add_parser(
+        "restart", help="request a warm controller restart / 请求控制器暖启动"
+    )
+    restart.add_argument(
+        "--yes", action="store_true", help="confirm warm restart / 确认暖启动"
+    )
     restart.add_argument(
         "--allow-running",
         action="store_true",
-        help="allow restart while RAPID is not stopped",
+        help="allow restart while RAPID is not stopped / 允许在 RAPID 未停止时重启",
     )
-    restart.add_argument("--json", action="store_true", dest="as_json")
+    restart.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
 
 
 def _add_rapid_commands(groups: argparse._SubParsersAction) -> None:
-    rapid = groups.add_parser("rapid", help="RAPID program information")
+    rapid = groups.add_parser(
+        "rapid", help="RAPID program information / RAPID 程序信息"
+    )
     commands = rapid.add_subparsers(dest="command", required=True)
-    tasks = commands.add_parser("tasks", help="list RAPID tasks")
-    tasks.add_argument("--json", action="store_true", dest="as_json")
-    modules = commands.add_parser("modules", help="list modules in a RAPID task")
-    modules.add_argument("task", help="RAPID task name, for example T_ROB1")
-    modules.add_argument("--json", action="store_true", dest="as_json")
-    read = commands.add_parser("read", help="write RAPID module source to stdout")
-    read.add_argument("task", help="RAPID task name, for example T_ROB1")
-    read.add_argument("module", help="RAPID module name")
-    read.add_argument("--json", action="store_true", dest="as_json")
+    tasks = commands.add_parser("tasks", help="list RAPID tasks / 列出 RAPID 任务")
+    tasks.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    modules = commands.add_parser(
+        "modules", help="list modules in a RAPID task / 列出 RAPID 任务中的模块"
+    )
+    modules.add_argument(
+        "task", help="RAPID task name, for example T_ROB1 / RAPID 任务名，例如 T_ROB1"
+    )
+    modules.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    read = commands.add_parser(
+        "read",
+        help="write RAPID module source to stdout / 将 RAPID 模块源码写到标准输出",
+    )
+    read.add_argument(
+        "task", help="RAPID task name, for example T_ROB1 / RAPID 任务名，例如 T_ROB1"
+    )
+    read.add_argument("module", help="RAPID module name / RAPID 模块名")
+    read.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
 
 
 def _add_io_commands(groups: argparse._SubParsersAction) -> None:
-    io_group = groups.add_parser("io", help="I/O system information")
+    io_group = groups.add_parser("io", help="I/O system information / I/O 系统信息")
     commands = io_group.add_subparsers(dest="command", required=True)
-    networks = commands.add_parser("networks", help="list I/O networks")
-    networks.add_argument("--json", action="store_true", dest="as_json")
-    devices = commands.add_parser("devices", help="list devices on an I/O network")
-    devices.add_argument("network", help="I/O network name, for example EtherCAT")
-    devices.add_argument("--json", action="store_true", dest="as_json")
-    signals = commands.add_parser("signals", help="list or search I/O signals")
-    signals.add_argument("--network")
-    signals.add_argument("--device")
+    networks = commands.add_parser("networks", help="list I/O networks / 列出 I/O 网络")
+    networks.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    devices = commands.add_parser(
+        "devices", help="list devices on an I/O network / 列出 I/O 网络上的设备"
+    )
+    devices.add_argument(
+        "network",
+        help="I/O network name, for example EtherCAT / I/O 网络名，例如 EtherCAT",
+    )
+    devices.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    signals = commands.add_parser(
+        "signals", help="list or search I/O signals / 列出或搜索 I/O 信号"
+    )
+    signals.add_argument("--network", help="filter by network / 按网络筛选")
+    signals.add_argument("--device", help="filter by device / 按设备筛选")
     signals.add_argument(
         "--type",
         dest="signal_type",
         choices=("DI", "DO", "AI", "AO", "GI", "GO"),
+        help="filter by signal type / 按信号类型筛选",
     )
-    signals.add_argument("--name")
-    signals.add_argument("--json", action="store_true", dest="as_json")
-    io_get = commands.add_parser("get", help="read one I/O signal")
-    io_get.add_argument("network")
-    io_get.add_argument("device")
-    io_get.add_argument("name")
-    io_get.add_argument("--json", action="store_true", dest="as_json")
+    signals.add_argument("--name", help="filter by signal name / 按信号名筛选")
+    signals.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    io_get = commands.add_parser("get", help="read one I/O signal / 读取一个 I/O 信号")
+    io_get.add_argument("network", help="I/O network name / I/O 网络名")
+    io_get.add_argument("device", help="I/O device name / I/O 设备名")
+    io_get.add_argument("name", help="I/O signal name / I/O 信号名")
+    io_get.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
 
 
 def _add_cfg_commands(groups: argparse._SubParsersAction) -> None:
-    cfg = groups.add_parser("cfg", help="controller configuration database")
-    commands = cfg.add_subparsers(dest="command", required=True)
-    domains = commands.add_parser("domains", help="list CFG domains")
-    domains.add_argument("--json", action="store_true", dest="as_json")
-    cfg_types = commands.add_parser("types", help="list types in a CFG domain")
-    cfg_types.add_argument("domain", help="CFG domain, for example EIO")
-    cfg_types.add_argument("--json", action="store_true", dest="as_json")
-    instances = commands.add_parser("instances", help="list CFG type instances")
-    instances.add_argument("domain")
-    instances.add_argument("cfg_type")
-    instances.add_argument("--json", action="store_true", dest="as_json")
-    cfg_get = commands.add_parser("get", help="read one CFG instance")
-    cfg_get.add_argument("domain")
-    cfg_get.add_argument("cfg_type")
-    cfg_get.add_argument("instance")
-    cfg_get.add_argument("--json", action="store_true", dest="as_json")
-    cfg_set = commands.add_parser("set", help="update one CFG instance attribute")
-    cfg_set.add_argument("domain")
-    cfg_set.add_argument("cfg_type")
-    cfg_set.add_argument("instance")
-    cfg_set.add_argument("attribute")
-    cfg_set.add_argument("value")
-    cfg_set.add_argument("--element-count", type=_positive_int, default=1)
-    cfg_set.add_argument("--yes", action="store_true", help="confirm CFG mutation")
-    cfg_set.add_argument("--json", action="store_true", dest="as_json")
-    cfg_create = commands.add_parser(
-        "create", help="create, configure, validate, and verify a CFG instance"
+    cfg = groups.add_parser(
+        "cfg", help="controller configuration database / 控制器配置数据库"
     )
-    cfg_create.add_argument("domain")
-    cfg_create.add_argument("cfg_type")
-    cfg_create.add_argument("instance")
+    commands = cfg.add_subparsers(dest="command", required=True)
+    domains = commands.add_parser("domains", help="list CFG domains / 列出 CFG 域")
+    domains.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    cfg_types = commands.add_parser(
+        "types", help="list types in a CFG domain / 列出 CFG 域中的类型"
+    )
+    cfg_types.add_argument(
+        "domain", help="CFG domain, for example EIO / CFG 域，例如 EIO"
+    )
+    cfg_types.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    instances = commands.add_parser(
+        "instances", help="list CFG type instances / 列出 CFG 类型实例"
+    )
+    instances.add_argument("domain", help="CFG domain / CFG 域")
+    instances.add_argument("cfg_type", help="CFG type / CFG 类型")
+    instances.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    cfg_get = commands.add_parser(
+        "get", help="read one CFG instance / 读取一个 CFG 实例"
+    )
+    cfg_get.add_argument("domain", help="CFG domain / CFG 域")
+    cfg_get.add_argument("cfg_type", help="CFG type / CFG 类型")
+    cfg_get.add_argument("instance", help="CFG instance name / CFG 实例名")
+    cfg_get.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    cfg_set = commands.add_parser(
+        "set", help="update one CFG instance attribute / 更新一个 CFG 实例属性"
+    )
+    cfg_set.add_argument("domain", help="CFG domain / CFG 域")
+    cfg_set.add_argument("cfg_type", help="CFG type / CFG 类型")
+    cfg_set.add_argument("instance", help="CFG instance name / CFG 实例名")
+    cfg_set.add_argument("attribute", help="attribute name / 属性名")
+    cfg_set.add_argument("value", help="new attribute value / 新属性值")
+    cfg_set.add_argument(
+        "--element-count",
+        type=_positive_int,
+        default=1,
+        help="array element count / 数组元素数量",
+    )
+    cfg_set.add_argument(
+        "--yes", action="store_true", help="confirm CFG mutation / 确认修改 CFG"
+    )
+    cfg_set.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    cfg_create = commands.add_parser(
+        "create",
+        help="create, configure, validate, and verify a CFG instance / "
+        "创建、配置、校验并验证一个 CFG 实例",
+    )
+    cfg_create.add_argument("domain", help="CFG domain / CFG 域")
+    cfg_create.add_argument("cfg_type", help="CFG type / CFG 类型")
+    cfg_create.add_argument("instance", help="new CFG instance name / 新 CFG 实例名")
     cfg_create.add_argument(
         "--set",
         dest="attribute_assignments",
         action="append",
         default=[],
         metavar="ATTRIBUTE=VALUE",
-        help="set an initial attribute; may be repeated",
+        help="set an initial attribute; may be repeated / 设置初始属性；可重复使用",
     )
-    cfg_create.add_argument("--yes", action="store_true", help="confirm CFG mutation")
-    cfg_create.add_argument("--json", action="store_true", dest="as_json")
+    cfg_create.add_argument(
+        "--yes", action="store_true", help="confirm CFG mutation / 确认修改 CFG"
+    )
+    cfg_create.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
     cfg_delete = commands.add_parser(
-        "delete", help="validate, delete, and verify a CFG instance"
+        "delete",
+        help="validate, delete, and verify a CFG instance / 校验、删除并验证一个 CFG 实例",
     )
-    cfg_delete.add_argument("domain")
-    cfg_delete.add_argument("cfg_type")
-    cfg_delete.add_argument("instance")
-    cfg_delete.add_argument("--yes", action="store_true", help="confirm CFG deletion")
-    cfg_delete.add_argument("--json", action="store_true", dest="as_json")
+    cfg_delete.add_argument("domain", help="CFG domain / CFG 域")
+    cfg_delete.add_argument("cfg_type", help="CFG type / CFG 类型")
+    cfg_delete.add_argument("instance", help="CFG instance name / CFG 实例名")
+    cfg_delete.add_argument(
+        "--yes", action="store_true", help="confirm CFG deletion / 确认删除 CFG 实例"
+    )
+    cfg_delete.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
 
 
 def _add_file_commands(groups: argparse._SubParsersAction) -> None:
-    files = groups.add_parser("file", help="controller file service")
+    files = groups.add_parser("file", help="controller file service / 控制器文件服务")
     commands = files.add_subparsers(dest="command", required=True)
-    list_command = commands.add_parser("list", aliases=["ls"], help="list a directory")
-    list_command.add_argument("path", nargs="?", default="/")
-    list_command.add_argument("--json", action="store_true", dest="as_json")
-    download = commands.add_parser("download", help="download one controller file")
-    download.add_argument("remote_path")
-    download.add_argument("local_path")
-    download.add_argument("--force", action="store_true")
-    download.add_argument("--json", action="store_true", dest="as_json")
-    upload = commands.add_parser("upload", help="upload one local file")
-    upload.add_argument("local_path")
-    upload.add_argument("remote_path")
-    upload.add_argument("--force", action="store_true")
-    upload.add_argument("--json", action="store_true", dest="as_json")
-    delete = commands.add_parser("delete", help="delete one controller file")
-    delete.add_argument("remote_path")
+    list_command = commands.add_parser(
+        "list", aliases=["ls"], help="list a directory / 列出目录内容"
+    )
+    list_command.add_argument(
+        "path", nargs="?", default="/", help="controller directory / 控制器目录"
+    )
+    list_command.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    download = commands.add_parser(
+        "download", help="download one controller file / 下载一个控制器文件"
+    )
+    download.add_argument("remote_path", help="controller file path / 控制器文件路径")
+    download.add_argument("local_path", help="local destination path / 本地目标路径")
+    download.add_argument(
+        "--force", action="store_true", help="replace local file / 覆盖本地文件"
+    )
+    download.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    upload = commands.add_parser(
+        "upload", help="upload one local file / 上传一个本地文件"
+    )
+    upload.add_argument("local_path", help="local source path / 本地源路径")
+    upload.add_argument("remote_path", help="controller destination / 控制器目标路径")
+    upload.add_argument(
+        "--force", action="store_true", help="replace remote file / 覆盖远程文件"
+    )
+    upload.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    delete = commands.add_parser(
+        "delete", help="delete one controller file / 删除一个控制器文件"
+    )
+    delete.add_argument("remote_path", help="controller file path / 控制器文件路径")
     delete.add_argument(
         "--yes",
         action="store_true",
-        help="confirm permanent deletion",
+        help="confirm permanent deletion / 确认永久删除",
     )
-    delete.add_argument("--json", action="store_true", dest="as_json")
+    delete.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
 
 
 def _add_backup_commands(groups: argparse._SubParsersAction) -> None:
-    backup = groups.add_parser("backup", help="controller backup operations")
+    backup = groups.add_parser(
+        "backup", help="controller backup operations / 控制器备份操作"
+    )
     commands = backup.add_subparsers(dest="command", required=True)
-    status = commands.add_parser("status", help="show controller backup state")
-    status.add_argument("--json", action="store_true", dest="as_json")
-    create = commands.add_parser("create", help="create and wait for a backup")
-    create.add_argument("destination", help="controller path, for example $TEMP/name")
+    status = commands.add_parser(
+        "status", help="show controller backup state / 显示控制器备份状态"
+    )
+    status.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
+    create = commands.add_parser(
+        "create", help="create and wait for a backup / 创建备份并等待完成"
+    )
+    create.add_argument(
+        "destination",
+        help="controller path, for example $TEMP/name / 控制器路径，例如 $TEMP/name",
+    )
     create.add_argument(
         "--directory",
         action="store_false",
         dest="archive",
-        help="create a directory backup instead of the default tar archive",
+        help="create a directory backup instead of the default tar archive / "
+        "创建目录备份而非默认 tar 归档",
     )
     create.add_argument(
         "--force",
         action="store_true",
-        help="allow the controller to replace an existing destination",
+        help="allow the controller to replace an existing destination / "
+        "允许控制器替换已有目标",
     )
     create.add_argument(
         "--allow-running",
         action="store_true",
-        help="allow backup while RAPID is not stopped",
+        help="allow backup while RAPID is not stopped / 允许在 RAPID 未停止时备份",
     )
     create.add_argument(
         "--wait-timeout",
         type=_positive_float,
         default=300.0,
         metavar="SECONDS",
+        help="maximum completion wait / 最长完成等待时间",
     )
     create.add_argument(
         "--poll-interval",
         type=_positive_float,
         default=1.0,
         metavar="SECONDS",
+        help="progress polling interval / 进度轮询间隔",
     )
-    create.add_argument("--json", action="store_true", dest="as_json")
+    create.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
 
 
 def _add_control_station_commands(groups: argparse._SubParsersAction) -> None:
     station = groups.add_parser(
-        "controlstation", help="RobotWare 8 Control Station state"
+        "controlstation",
+        help="RobotWare 8 Control Station state / RobotWare 8 控制站状态",
     )
     commands = station.add_subparsers(dest="command", required=True)
-    status = commands.add_parser("status", help="show remote write-access state")
-    status.add_argument("--json", action="store_true", dest="as_json")
+    status = commands.add_parser(
+        "status", help="show remote write-access state / 显示远程写权限状态"
+    )
+    status.add_argument(
+        "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:

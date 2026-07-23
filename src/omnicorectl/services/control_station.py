@@ -1,4 +1,7 @@
-"""RobotWare 8 Control Station and write-access resources."""
+"""RobotWare 8 Control Station and write-access resources.
+
+RobotWare 8 控制站与写权限资源。
+"""
 
 from __future__ import annotations
 
@@ -39,7 +42,10 @@ class RemoteControlStation:
 
     @property
     def wire_id(self) -> str:
-        """Return ABB's required braced GUID representation."""
+        """Return ABB's required braced GUID representation.
+
+        返回 ABB 要求的带花括号 GUID 表示形式。
+        """
 
         return f"{{{UUID(self.station_id)}}}"
 
@@ -102,7 +108,10 @@ class ControlStationService:
         *,
         best_effort_release: bool = False,
     ) -> Iterator[WriteAccessStatus]:
-        """Hold write access for one bounded operation and always release it."""
+        """Hold write access for one bounded operation and always release it.
+
+        仅在一个有界操作期间持有写权限，并始终释放该权限。
+        """
 
         self.register_remote(station)
         acquired = False

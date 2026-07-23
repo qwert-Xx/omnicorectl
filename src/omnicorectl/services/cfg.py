@@ -1,4 +1,7 @@
-"""Controller configuration database resources."""
+"""Controller configuration database resources.
+
+控制器配置数据库资源。
+"""
 
 from __future__ import annotations
 
@@ -229,6 +232,9 @@ class CfgService:
         RobotWare creates an instance with type defaults first. Attribute values are
         then sent as one update so the controller only validates the intended final
         state. Any failure removes the newly created instance again.
+
+        RobotWare 首先使用类型默认值创建实例，随后通过一次更新提交全部属性，使
+        控制器只校验预期的最终状态。任意步骤失败都会删除刚创建的实例。
         """
 
         name = instance.strip()

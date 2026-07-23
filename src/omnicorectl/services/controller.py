@@ -1,4 +1,7 @@
-"""Controller information and lifecycle workflows."""
+"""Controller information and lifecycle workflows.
+
+控制器信息与生命周期工作流。
+"""
 
 from __future__ import annotations
 

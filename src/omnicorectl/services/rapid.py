@@ -1,4 +1,4 @@
-"""Read-only RAPID resources."""
+"""Read-only RAPID resources. / 只读 RAPID 资源。"""
 
 from __future__ import annotations
 
