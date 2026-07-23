@@ -61,6 +61,18 @@ export OMNICORE_CONTROL_STATION_PIN='set-a-numeric-pin'
 # Update, validate, re-read, and report that a warm restart is required.
 .venv/bin/omnicorectl --insecure cfg set EIO EIO_SIGNAL MySignal Label 'new label' --yes
 
+# Create a default external instance, apply all initial attributes in one update,
+# validate the final state, and verify it by reading it back. A failed create is
+# automatically removed again.
+.venv/bin/omnicorectl --insecure cfg create EIO EIO_SIGNAL EtherCAT_DI \
+  --set SignalType=DI \
+  --set Device=EC_Internal_Device \
+  --set DeviceMap=0 \
+  --yes
+
+# Validate an external instance for deletion, delete it, and verify absence.
+.venv/bin/omnicorectl --insecure cfg delete EIO EIO_SIGNAL EtherCAT_DI --yes
+
 # Browse controller file volumes and directories.
 .venv/bin/omnicorectl --insecure file list
 .venv/bin/omnicorectl --insecure file list '$HOME'

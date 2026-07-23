@@ -98,6 +98,29 @@ class IoSignalsTests(unittest.TestCase):
 
         self.assertEqual(signals, [])
 
+    def test_accepts_empty_category_for_external_signal(self) -> None:
+        item = signal("EtherCAT_DI", "EtherCAT/EC_Internal_Device/EtherCAT_DI")
+        item["category"] = ""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            return httpx.Response(
+                200,
+                json={"_links": {}, "_embedded": {"resources": [item]}},
+            )
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            signals = IoService(client).list_signals()
+
+        self.assertEqual(signals[0].category, "")
+
     def test_gets_detailed_signal_state(self) -> None:
         payload = {
             "_embedded": {

@@ -23,6 +23,8 @@ from omnicorectl.output import (
     format_backup_result,
     format_backup_status,
     format_cfg_change,
+    format_cfg_creation,
+    format_cfg_deletion,
     format_cfg_domains,
     format_cfg_instance,
     format_cfg_instances,
@@ -178,6 +180,30 @@ def _add_cfg_commands(groups: argparse._SubParsersAction) -> None:
     cfg_set.add_argument("--element-count", type=_positive_int, default=1)
     cfg_set.add_argument("--yes", action="store_true", help="confirm CFG mutation")
     cfg_set.add_argument("--json", action="store_true", dest="as_json")
+    cfg_create = commands.add_parser(
+        "create", help="create, configure, validate, and verify a CFG instance"
+    )
+    cfg_create.add_argument("domain")
+    cfg_create.add_argument("cfg_type")
+    cfg_create.add_argument("instance")
+    cfg_create.add_argument(
+        "--set",
+        dest="attribute_assignments",
+        action="append",
+        default=[],
+        metavar="ATTRIBUTE=VALUE",
+        help="set an initial attribute; may be repeated",
+    )
+    cfg_create.add_argument("--yes", action="store_true", help="confirm CFG mutation")
+    cfg_create.add_argument("--json", action="store_true", dest="as_json")
+    cfg_delete = commands.add_parser(
+        "delete", help="validate, delete, and verify a CFG instance"
+    )
+    cfg_delete.add_argument("domain")
+    cfg_delete.add_argument("cfg_type")
+    cfg_delete.add_argument("instance")
+    cfg_delete.add_argument("--yes", action="store_true", help="confirm CFG deletion")
+    cfg_delete.add_argument("--json", action="store_true", dest="as_json")
 
 
 def _add_file_commands(groups: argparse._SubParsersAction) -> None:
@@ -365,6 +391,25 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
                 element_count=args.element_count,
             )
         print(format_cfg_change(change, as_json=args.as_json))
+    elif command == ("cfg", "create"):
+        if not args.yes:
+            raise ConfigurationError("cfg create requires explicit --yes confirmation")
+        attributes = _attribute_assignments(args.attribute_assignments)
+        station = _remote_control_station(args)
+        with ControlStationService(client).write_access(station):
+            creation = CfgService(client).create_instance(
+                args.domain, args.cfg_type, args.instance, attributes
+            )
+        print(format_cfg_creation(creation, as_json=args.as_json))
+    elif command == ("cfg", "delete"):
+        if not args.yes:
+            raise ConfigurationError("cfg delete requires explicit --yes confirmation")
+        station = _remote_control_station(args)
+        with ControlStationService(client).write_access(station):
+            deletion = CfgService(client).delete_instance(
+                args.domain, args.cfg_type, args.instance
+            )
+        print(format_cfg_deletion(deletion, as_json=args.as_json))
     elif args.group == "file" and args.command in {"list", "ls"}:
         entries = FileService(client).list_directory(args.path)
         print(format_file_entries(entries, as_json=args.as_json))
@@ -462,6 +507,22 @@ def _positive_int(value: str) -> int:
     if number <= 0:
         raise argparse.ArgumentTypeError("value must be greater than zero")
     return number
+
+
+def _attribute_assignments(assignments: Sequence[str]) -> dict[str, str]:
+    attributes: dict[str, str] = {}
+    for assignment in assignments:
+        attribute, separator, value = assignment.partition("=")
+        attribute = attribute.strip()
+        if not separator or not attribute:
+            raise ConfigurationError(
+                f"invalid CFG attribute assignment {assignment!r}; "
+                "expected ATTRIBUTE=VALUE"
+            )
+        if attribute in attributes:
+            raise ConfigurationError(f"duplicate CFG attribute assignment: {attribute}")
+        attributes[attribute] = value
+    return attributes
 
 
 def _env_flag(name: str) -> bool:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from urllib.parse import quote
 
-from omnicorectl.errors import ConfigurationError, ProtocolError
+from omnicorectl.errors import ConfigurationError, ProtocolError, RwsHttpError
 from omnicorectl.rws.client import RwsClient
 from omnicorectl.rws.hal import (
     embedded_resources,
@@ -47,6 +47,27 @@ class CfgChange:
     old_value: str
     new_value: str
     changed: bool
+    validated: bool
+    restart_required: bool
+
+
+@dataclass(frozen=True, slots=True)
+class CfgCreation:
+    domain: str
+    cfg_type: str
+    instance: str
+    instance_id: str
+    attributes: dict[str, str]
+    validated: bool
+    restart_required: bool
+
+
+@dataclass(frozen=True, slots=True)
+class CfgDeletion:
+    domain: str
+    cfg_type: str
+    instance: str
+    instance_id: str
     validated: bool
     restart_required: bool
 
@@ -196,6 +217,115 @@ class CfgService:
             restart_required=True,
         )
 
+    def create_instance(
+        self,
+        domain: str,
+        cfg_type: str,
+        instance: str,
+        attributes: dict[str, str] | None = None,
+    ) -> CfgCreation:
+        """Create, configure, validate, and verify one external CFG instance.
+
+        RobotWare creates an instance with type defaults first. Attribute values are
+        then sent as one update so the controller only validates the intended final
+        state. Any failure removes the newly created instance again.
+        """
+
+        name = instance.strip()
+        if not name:
+            raise ConfigurationError("CFG instance name cannot be empty")
+        if self._instance_exists(domain, cfg_type, name):
+            raise ConfigurationError(
+                f"CFG instance already exists: {domain}/{cfg_type}/{name}"
+            )
+
+        requested = dict(attributes or {})
+        if "Name" in requested and requested["Name"] != name:
+            raise ConfigurationError(
+                "the Name attribute must match the CFG instance name"
+            )
+
+        collection = "/rw/cfg/{}/{}/instances/create-default".format(
+            quote(domain, safe=""), quote(cfg_type, safe="")
+        )
+        created = False
+        try:
+            self._client.post_form(collection, {"name": name})
+            created = True
+            default_instance = self.get_instance(domain, cfg_type, name)
+            unknown = sorted(set(requested) - set(default_instance.attributes))
+            if unknown:
+                raise ConfigurationError(
+                    f"CFG attributes do not exist on {name}: {', '.join(unknown)}"
+                )
+            if requested:
+                self._post_attributes(
+                    _instance_endpoint(domain, cfg_type, name), requested
+                )
+            self._validate_instance(domain, cfg_type, name)
+            after = self.get_instance(domain, cfg_type, name)
+            mismatches = {
+                key: after.attributes.get(key)
+                for key, value in requested.items()
+                if after.attributes.get(key) != value
+            }
+            if mismatches:
+                details = ", ".join(
+                    f"{key}={value!r}" for key, value in mismatches.items()
+                )
+                raise ProtocolError(
+                    f"CFG create verification failed for {name}: {details}"
+                )
+        except Exception as original_error:
+            if created:
+                try:
+                    self._client.delete(_instance_endpoint(domain, cfg_type, name))
+                    if self._instance_exists(domain, cfg_type, name):
+                        raise ProtocolError(
+                            "created instance still exists after rollback"
+                        )
+                except Exception as rollback_error:
+                    raise ProtocolError(
+                        "CFG create failed and automatic rollback also failed: "
+                        f"{rollback_error}"
+                    ) from original_error
+            if isinstance(original_error, ConfigurationError):
+                raise
+            raise ProtocolError(
+                f"CFG create failed; the new instance was removed: {original_error}"
+            ) from original_error
+
+        return CfgCreation(
+            domain=domain,
+            cfg_type=cfg_type,
+            instance=after.name,
+            instance_id=after.instance_id,
+            attributes=after.attributes,
+            validated=True,
+            restart_required=True,
+        )
+
+    def delete_instance(self, domain: str, cfg_type: str, instance: str) -> CfgDeletion:
+        before = self.get_instance(domain, cfg_type, instance)
+        if before.read_only:
+            raise ConfigurationError(
+                f"CFG instance is read only: {domain}/{cfg_type}/{instance}"
+            )
+        self._validate_instance(domain, cfg_type, instance, operation=1)
+        self._client.delete(_instance_endpoint(domain, cfg_type, instance))
+        if self._instance_exists(domain, cfg_type, instance):
+            raise ProtocolError(
+                f"CFG delete verification failed: {domain}/{cfg_type}/{instance}"
+            )
+        return CfgDeletion(
+            domain=domain,
+            cfg_type=cfg_type,
+            instance=before.name,
+            instance_id=before.instance_id,
+            validated=True,
+            restart_required=True,
+        )
+
     def _post_attribute(
         self,
         endpoint: str,
@@ -205,11 +335,20 @@ class CfgService:
     ) -> None:
         self._client.post_form(endpoint, {attribute: f"[{value},{element_count}]"})
 
-    def _validate_instance(self, domain: str, cfg_type: str, instance: str) -> None:
+    def _post_attributes(self, endpoint: str, attributes: dict[str, str]) -> None:
+        self._client.post_form(
+            endpoint, {key: f"[{value},1]" for key, value in attributes.items()}
+        )
+
+    def _validate_instance(
+        self, domain: str, cfg_type: str, instance: str, *, operation: int = 0
+    ) -> None:
+        if operation not in {0, 1}:
+            raise ConfigurationError("CFG validation operation must be 0 or 1")
         payload = self._client.post_form_optional_json(
             "/rw/cfg/validate-instances",
             {
-                "operation": "0",
+                "operation": str(operation),
                 "cfgdomain": domain,
                 "cfgtype": cfg_type,
                 "instances": f"[{instance}]",
@@ -226,6 +365,15 @@ class CfgService:
         code = status.get("code", "unknown")
         message = status.get("msg", "validation failed")
         raise ProtocolError(f"CFG validation failed (ABB {code}: {message})")
+
+    def _instance_exists(self, domain: str, cfg_type: str, instance: str) -> bool:
+        try:
+            self.get_instance(domain, cfg_type, instance)
+        except RwsHttpError as exc:
+            if exc.status_code == 404:
+                return False
+            raise
+        return True
 
 
 def _instance_endpoint(domain: str, cfg_type: str, instance: str) -> str:

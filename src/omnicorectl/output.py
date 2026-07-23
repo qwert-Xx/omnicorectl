@@ -9,7 +9,14 @@ from dataclasses import asdict
 from typing import Any
 
 from omnicorectl.services.backup import BackupResult, BackupStatus
-from omnicorectl.services.cfg import CfgChange, CfgDomain, CfgInstance, CfgType
+from omnicorectl.services.cfg import (
+    CfgChange,
+    CfgCreation,
+    CfgDeletion,
+    CfgDomain,
+    CfgInstance,
+    CfgType,
+)
 from omnicorectl.services.controller import ControllerStatus, RestartResult
 from omnicorectl.services.control_station import WriteAccessStatus
 from omnicorectl.services.files import (
@@ -227,6 +234,32 @@ def format_cfg_change(change: CfgChange, *, as_json: bool) -> str:
             f"Attribute:   {change.attribute}",
             f"Old value:   {change.old_value}",
             f"New value:   {change.new_value}",
+            "Validated:   yes",
+            "Restart required: yes",
+        )
+    )
+
+
+def format_cfg_creation(creation: CfgCreation, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(creation)
+    return "\n".join(
+        (
+            f"CFG created: {creation.domain}/{creation.cfg_type}/{creation.instance}",
+            f"Instance ID: {creation.instance_id}",
+            "Validated:   yes",
+            "Restart required: yes",
+        )
+    )
+
+
+def format_cfg_deletion(deletion: CfgDeletion, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(deletion)
+    return "\n".join(
+        (
+            f"CFG deleted: {deletion.domain}/{deletion.cfg_type}/{deletion.instance}",
+            f"Instance ID: {deletion.instance_id}",
             "Validated:   yes",
             "Restart required: yes",
         )

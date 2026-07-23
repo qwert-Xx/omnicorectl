@@ -5,7 +5,7 @@ import unittest
 import httpx
 
 from omnicorectl.rws import RwsClient
-from omnicorectl.errors import ProtocolError
+from omnicorectl.errors import ConfigurationError, ProtocolError
 from omnicorectl.services.cfg import CfgService
 
 
@@ -270,6 +270,137 @@ class CfgTests(unittest.TestCase):
         )
         self.assertEqual(validation_count, 2)
 
+    def test_creates_configures_validates_and_verifies_instance(self) -> None:
+        calls: list[tuple[str, str, str]] = []
+        get_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal get_count
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            body = request.content.decode()
+            calls.append((request.method, request.url.path, body))
+            if request.method == "GET":
+                get_count += 1
+                if get_count == 1:
+                    return httpx.Response(404, json={"status": {"msg": "missing"}})
+                signal_type = "DI" if get_count == 2 else "DO"
+                return httpx.Response(
+                    200,
+                    json=_cfg_signal_payload("EtherCAT_DO", signal_type),
+                )
+            if request.url.path == "/rw/cfg/validate-instances":
+                return httpx.Response(204)
+            if request.url.path.endswith("/create-default"):
+                return httpx.Response(201)
+            return httpx.Response(204)
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            creation = CfgService(client).create_instance(
+                "EIO",
+                "EIO_SIGNAL",
+                "EtherCAT_DO",
+                {"SignalType": "DO", "DeviceMap": "0"},
+            )
+
+        self.assertEqual(creation.instance, "EtherCAT_DO")
+        self.assertEqual(creation.attributes["SignalType"], "DO")
+        self.assertTrue(creation.validated)
+        self.assertEqual(
+            calls[1],
+            (
+                "POST",
+                "/rw/cfg/EIO/EIO_SIGNAL/instances/create-default",
+                "name=EtherCAT_DO",
+            ),
+        )
+        self.assertEqual(
+            calls[3],
+            (
+                "POST",
+                "/rw/cfg/EIO/EIO_SIGNAL/instances/EtherCAT_DO",
+                "SignalType=%5BDO%2C1%5D&DeviceMap=%5B0%2C1%5D",
+            ),
+        )
+
+    def test_create_removes_instance_if_attribute_is_unknown(self) -> None:
+        created = False
+        deleted = False
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal created, deleted
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            if request.method == "GET":
+                if not created or deleted:
+                    return httpx.Response(404, json={})
+                return httpx.Response(
+                    200, json=_cfg_signal_payload("EtherCAT_DI", "DI")
+                )
+            if request.method == "DELETE":
+                deleted = True
+                return httpx.Response(204)
+            if request.url.path.endswith("/create-default"):
+                created = True
+            return httpx.Response(201)
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            with self.assertRaisesRegex(ConfigurationError, "do not exist"):
+                CfgService(client).create_instance(
+                    "EIO", "EIO_SIGNAL", "EtherCAT_DI", {"NoSuch": "value"}
+                )
+
+        self.assertTrue(deleted)
+
+    def test_validates_deletes_and_verifies_instance(self) -> None:
+        deleted = False
+        validation_body = ""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal deleted, validation_body
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            if request.method == "GET":
+                if deleted:
+                    return httpx.Response(404, json={})
+                return httpx.Response(
+                    200, json=_cfg_signal_payload("EtherCAT_DO", "DO")
+                )
+            if request.url.path == "/rw/cfg/validate-instances":
+                validation_body = request.content.decode()
+                return httpx.Response(204)
+            if request.method == "DELETE":
+                deleted = True
+                return httpx.Response(204)
+            raise AssertionError(f"unexpected request: {request.method} {request.url}")
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            deletion = CfgService(client).delete_instance(
+                "EIO", "EIO_SIGNAL", "EtherCAT_DO"
+            )
+
+        self.assertTrue(deleted)
+        self.assertTrue(deletion.validated)
+        self.assertIn("operation=1", validation_body)
+
 
 def _cfg_instance_payload(name: str, label: str) -> dict[str, object]:
     return {
@@ -282,6 +413,28 @@ def _cfg_instance_payload(name: str, label: str) -> dict[str, object]:
                 "attrib": [
                     {"_type": "cfg-ia-t", "_title": "Name", "value": name},
                     {"_type": "cfg-ia-t", "_title": "Label", "value": label},
+                ],
+            }
+        ]
+    }
+
+
+def _cfg_signal_payload(name: str, signal_type: str) -> dict[str, object]:
+    return {
+        "state": [
+            {
+                "_type": "cfg-dt-instance",
+                "_title": name,
+                "rdonly": "false",
+                "instanceid": "20",
+                "attrib": [
+                    {"_type": "cfg-ia-t", "_title": "Name", "value": name},
+                    {
+                        "_type": "cfg-ia-t",
+                        "_title": "SignalType",
+                        "value": signal_type,
+                    },
+                    {"_type": "cfg-ia-t", "_title": "DeviceMap", "value": "0"},
                 ],
             }
         ]

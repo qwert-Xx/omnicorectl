@@ -7,7 +7,12 @@ from urllib.parse import quote
 
 from omnicorectl.errors import ProtocolError
 from omnicorectl.rws.client import RwsClient
-from omnicorectl.rws.hal import embedded_resources, has_next_link, required_text
+from omnicorectl.rws.hal import (
+    embedded_resources,
+    has_next_link,
+    required_string,
+    required_text,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,7 +152,9 @@ class IoService:
                         device=item_device,
                         name=required_text(item, "name", resource="I/O signal"),
                         signal_type=required_text(item, "type", resource="I/O signal"),
-                        category=required_text(item, "category", resource="I/O signal"),
+                        category=required_string(
+                            item, "category", resource="I/O signal"
+                        ),
                         value=required_text(item, "lvalue", resource="I/O signal"),
                         state=required_text(item, "lstate", resource="I/O signal"),
                     )
@@ -176,7 +183,7 @@ class IoService:
             device=device,
             name=required_text(item, "name", resource="I/O signal"),
             signal_type=required_text(item, "type", resource="I/O signal"),
-            category=required_text(item, "category", resource="I/O signal"),
+            category=required_string(item, "category", resource="I/O signal"),
             logical_value=required_text(item, "lvalue", resource="I/O signal"),
             logical_state=required_text(item, "lstate", resource="I/O signal"),
             physical_value=required_text(item, "pvalue", resource="I/O signal"),
