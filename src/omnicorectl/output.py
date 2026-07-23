@@ -20,7 +20,11 @@ from omnicorectl.services.cfg import (
     CfgInstance,
     CfgType,
 )
-from omnicorectl.services.controller import ControllerStatus, RestartResult
+from omnicorectl.services.controller import (
+    ControllerStatus,
+    MotorStateChange,
+    RestartResult,
+)
 from omnicorectl.services.control_station import WriteAccessStatus
 from omnicorectl.services.files import (
     DeleteResult,
@@ -73,6 +77,17 @@ def format_restart_result(result: RestartResult, *, as_json: bool) -> str:
     return (
         "Warm restart accepted; the controller connection may drop "
         f"(previous restart count: {result.restart_count_before})."
+    )
+
+
+def format_motor_state_change(result: MotorStateChange, *, as_json: bool) -> str:
+    if as_json:
+        return _json_object(result)
+    if not result.changed:
+        return f"Controller already in {result.state_after} state; no change requested."
+    return (
+        f"Controller motor state changed: {result.state_before} -> "
+        f"{result.state_after}."
     )
 
 

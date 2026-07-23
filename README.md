@@ -102,6 +102,10 @@ export OMNICORE_CONTROL_STATION_PIN='set-a-numeric-pin'
 # Inspect external-control/write-access state.
 .venv/bin/omnicorectl --insecure controlstation status
 
+# Switch motor power with explicit confirmation. RAPID must be stopped by default.
+.venv/bin/omnicorectl --insecure controller motors-off --yes
+.venv/bin/omnicorectl --insecure controller motors-on --yes
+
 # Request only a normal warm restart.
 .venv/bin/omnicorectl --insecure controller restart --yes
 ```
@@ -124,6 +128,8 @@ The complete RAPID editing and debugging command reference is in
 - Mutating commands use a bounded Control Station write-access lifecycle.
   Destructive operations require confirmation; file and CFG writes include
   guards, validation, readback, or rollback as applicable.
+- Motor-state commands require explicit confirmation, require RAPID stopped by
+  default, and verify the resulting controller state before returning.
 - RAPID source writes use change-count concurrency checks, implicit RAPID
   Mastership, controller-side build diagnostics, and rollback by default.
 

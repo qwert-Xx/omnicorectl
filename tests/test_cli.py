@@ -20,6 +20,7 @@ from omnicorectl.output import (
     format_devices,
     format_download_result,
     format_file_entries,
+    format_motor_state_change,
     format_modules,
     format_networks,
     format_restart_result,
@@ -31,7 +32,11 @@ from omnicorectl.output import (
     format_write_access_status,
     write_source,
 )
-from omnicorectl.services.controller import ControllerStatus, RestartResult
+from omnicorectl.services.controller import (
+    ControllerStatus,
+    MotorStateChange,
+    RestartResult,
+)
 from omnicorectl.services.control_station import WriteAccessStatus
 from omnicorectl.services.backup import BackupResult, BackupStatus
 from omnicorectl.services.files import (
@@ -110,6 +115,21 @@ class CliTests(unittest.TestCase):
         self.assertIn("7", text)
         data = json.loads(format_restart_result(result, as_json=True))
         self.assertEqual(data["mode"], "restart")
+
+    def test_motor_state_change_text_json_and_parser_guards(self) -> None:
+        result = MotorStateChange("motoron", "motoroff", "motoron", True)
+        self.assertIn(
+            "motoroff -> motoron",
+            format_motor_state_change(result, as_json=False),
+        )
+        data = json.loads(format_motor_state_change(result, as_json=True))
+        self.assertEqual(data["requested_state"], "motoron")
+        self.assertTrue(data["changed"])
+
+        args = build_parser().parse_args(["controller", "motors-on", "--yes", "--json"])
+        self.assertEqual(args.command, "motors-on")
+        self.assertTrue(args.yes)
+        self.assertFalse(args.allow_running)
 
     def test_missing_connection_configuration_returns_exit_2(self) -> None:
         stderr = io.StringIO()

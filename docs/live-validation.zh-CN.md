@@ -67,6 +67,20 @@
 整模块写入和范围补丁均使 change count 恰好增加一。探针没有入口点、从未执行，也不
 包含运动指令；完成后没有留下永久 RAPID 模块或文件系统内容。
 
+## 远程电机状态控制
+
+2026-07-23 在真实控制器上验证了受保护的 CLI 命令。验证前操作模式为 `AUTO`、
+RAPID 已停止，且没有活动的安全违规：
+
+1. `controller motors-off --yes --json` 完成并验证
+   `motoron -> motoroff`；
+2. `controller motors-on --yes --json` 完成并验证
+   `motoroff -> motoron`；
+3. 最终状态回读为 `motoron`、RAPID `stopped`、执行周期 `once`；
+4. 两个命令结束后，控制站状态均为 `held=false`。
+
+本次验证没有启动 RAPID、移动程序指针或请求任何运动指令。
+
 ## CFG 与 EtherCAT I/O
 
 CFG 创建工作流创建并校验了两个外部信号，以及 Cross Data 和 Transfer Data 实例；

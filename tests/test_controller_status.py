@@ -5,6 +5,7 @@ import unittest
 
 import httpx
 
+from omnicorectl.errors import ConfigurationError, ProtocolError
 from omnicorectl.rws import RwsClient
 from omnicorectl.services.controller import ControllerService
 
@@ -107,6 +108,103 @@ class ControllerStatusTests(unittest.TestCase):
                 ),
             ],
         )
+
+    def test_switches_motor_state_and_verifies_readback(self) -> None:
+        state = "motoron"
+        calls: list[tuple[str, str]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal state
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            calls.append((request.method, request.content.decode()))
+            if request.method == "POST":
+                self.assertEqual(request.url.path, "/rw/panel/ctrl-state")
+                self.assertEqual(request.content.decode(), "ctrl-state=motoroff")
+                state = "motoroff"
+                return httpx.Response(204)
+            return httpx.Response(200, json={"state": [{"ctrlstate": state}]})
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            result = ControllerService(client).set_motor_state("motoroff")
+
+        self.assertTrue(result.changed)
+        self.assertEqual(result.state_before, "motoron")
+        self.assertEqual(result.state_after, "motoroff")
+        self.assertEqual(
+            calls,
+            [
+                ("GET", ""),
+                ("POST", "ctrl-state=motoroff"),
+                ("GET", ""),
+            ],
+        )
+
+    def test_motor_state_noop_and_invalid_safety_transition(self) -> None:
+        guardstop_requests: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            guardstop_requests.append(request.method)
+            return httpx.Response(200, json={"state": [{"ctrlstate": "guardstop"}]})
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            service = ControllerService(client)
+            with self.assertRaisesRegex(ConfigurationError, "guardstop"):
+                service.set_motor_state("motoron")
+        self.assertEqual(guardstop_requests, ["GET"])
+
+        noop_requests: list[str] = []
+
+        def motoron_handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            noop_requests.append(request.method)
+            return httpx.Response(200, json={"state": [{"ctrlstate": "motoron"}]})
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(motoron_handler),
+            request_interval=0,
+        ) as client:
+            result = ControllerService(client).set_motor_state("motoron")
+        self.assertFalse(result.changed)
+        self.assertEqual(noop_requests, ["GET"])
+
+    def test_motor_on_stops_polling_when_safety_state_appears(self) -> None:
+        states = iter(("motoroff", "guardstop"))
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            if request.method == "POST":
+                return httpx.Response(204)
+            return httpx.Response(200, json={"state": [{"ctrlstate": next(states)}]})
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            with self.assertRaisesRegex(ProtocolError, "guardstop"):
+                ControllerService(client).set_motor_state("motoron")
 
 
 if __name__ == "__main__":

@@ -36,6 +36,7 @@ from omnicorectl.output import (
     format_devices,
     format_download_result,
     format_file_entries,
+    format_motor_state_change,
     format_networks,
     format_restart_result,
     format_signal_details,
@@ -142,6 +143,34 @@ def _add_controller_commands(groups: argparse._SubParsersAction) -> None:
     restart.add_argument(
         "--json", action="store_true", dest="as_json", help="emit JSON / 输出 JSON"
     )
+    for name, help_text in (
+        (
+            "motors-on",
+            "enable power to robot motors / 接通机器人电机电源",
+        ),
+        (
+            "motors-off",
+            "remove power from robot motors / 断开机器人电机电源",
+        ),
+    ):
+        motors = commands.add_parser(name, help=help_text)
+        motors.add_argument(
+            "--yes",
+            action="store_true",
+            help="confirm the motor-state change / 确认切换电机状态",
+        )
+        motors.add_argument(
+            "--allow-running",
+            action="store_true",
+            help="allow the request while RAPID is not stopped / "
+            "允许在 RAPID 未停止时请求",
+        )
+        motors.add_argument(
+            "--json",
+            action="store_true",
+            dest="as_json",
+            help="emit JSON / 输出 JSON",
+        )
 
 
 def _add_rapid_commands(groups: argparse._SubParsersAction) -> None:
@@ -453,6 +482,37 @@ def _dispatch(client: RwsClient, args: argparse.Namespace) -> int:
         ):
             restart_result = controller.warm_restart()
         print(format_restart_result(restart_result, as_json=args.as_json))
+    elif command in {
+        ("controller", "motors-on"),
+        ("controller", "motors-off"),
+    }:
+        if not args.yes:
+            raise ConfigurationError(
+                f"controller {args.command} requires explicit --yes confirmation"
+            )
+        controller = ControllerService(client)
+        controller_status = controller.status()
+        if (
+            not args.allow_running
+            and controller_status.rapid_execution.lower() != "stopped"
+        ):
+            raise ConfigurationError(
+                "RAPID is not stopped; stop it or explicitly use --allow-running"
+            )
+        target = "motoron" if args.command == "motors-on" else "motoroff"
+        station = _remote_control_station(args)
+        with ControlStationService(client).write_access(station):
+            latest_status = controller.status()
+            if (
+                not args.allow_running
+                and latest_status.rapid_execution.lower() != "stopped"
+            ):
+                raise ConfigurationError(
+                    "RAPID started while acquiring write access; stop it or "
+                    "explicitly use --allow-running"
+                )
+            motor_change = controller.set_motor_state(target)
+        print(format_motor_state_change(motor_change, as_json=args.as_json))
     elif command == ("io", "networks"):
         print(format_networks(IoService(client).list_networks(), as_json=args.as_json))
     elif command == ("io", "devices"):

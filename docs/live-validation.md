@@ -73,6 +73,23 @@ The observed change count advanced by one for both the complete write and range
 patch. The probe had no entry point, was never executed, and contained no motion
 instruction. No permanent RAPID or file-system artifact remained afterward.
 
+## Remote motor-state control
+
+On 2026-07-23 the guarded CLI commands were exercised on the real controller
+while the operation mode was `AUTO`, RAPID was stopped, and no safety violation
+was active:
+
+1. `controller motors-off --yes --json` changed and verified
+   `motoron -> motoroff`;
+2. `controller motors-on --yes --json` changed and verified
+   `motoroff -> motoron`;
+3. a final status read reported `motoron`, RAPID `stopped`, and execution cycle
+   `once`;
+4. Control Station status reported `held=false` after both commands.
+
+No RAPID execution, program-pointer movement, or motion instruction was
+requested during this validation.
+
 ## CFG and EtherCAT I/O
 
 The CFG create workflow created and validated two external signals plus Cross

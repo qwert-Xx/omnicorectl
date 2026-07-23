@@ -102,6 +102,10 @@ export OMNICORE_CONTROL_STATION_PIN='set-a-numeric-pin'
 # 检查外部控制与写权限状态。
 .venv/bin/omnicorectl --insecure controlstation status
 
+# 明确确认后切换电机电源；默认要求 RAPID 已停止。
+.venv/bin/omnicorectl --insecure controller motors-off --yes
+.venv/bin/omnicorectl --insecure controller motors-on --yes
+
 # 仅请求普通暖启动。
 .venv/bin/omnicorectl --insecure controller restart --yes
 ```
@@ -119,6 +123,7 @@ export OMNICORE_CONTROL_STATION_PIN='set-a-numeric-pin'
 - 控制器流量忽略代理环境变量。
 - 修改命令只在有界的控制站生命周期内持有写权限。破坏性操作需要确认，文件与
   CFG 写入按需执行保护、校验、回读或回滚。
+- 电机状态命令需要明确确认，默认要求 RAPID 已停止，并在返回前验证最终控制器状态。
 - RAPID 源码写入默认使用 change count 并发检查、隐式 RAPID Mastership、控制器端
   构建诊断和失败回滚。
 
