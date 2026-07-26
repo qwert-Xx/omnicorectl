@@ -18,14 +18,19 @@
   -> 在有界范围内获取控制站写权限
   -> 再次校验 change count
   -> 使用隐式 RAPID Mastership 写入
-  -> 链接任务并读取控制器构建错误
-  -> 如果有诊断信息，恢复原源码并重新构建
+  -> 精确读回源码、链接任务并读取控制器构建错误
+  -> 任何读回校验或构建失败后都恢复原源码并重新构建
   -> 即使操作失败也释放写权限
 ```
 
 `--allow-running`、`--no-build`、`--no-rollback` 和 `--allow-rename` 会分别
 放宽安全保护，必须显式指定。`--dry-run` 只执行本地校验并显示差异，不申请写权限。
 自动化调用应使用 `--if-change-count N` 拒绝过期修改。
+
+完整源码读取兼容 RobotWare 的两种响应：直接返回 `module-text`，或由 RW8.1 返回
+指向 FileService 临时文件的 `file-path`。临时源码按严格 UTF-8 下载，并允许可选
+BOM。工具会保留控制器的 `module-length` 作为元数据，但不会用它截断源码，因为
+RW8.1 返回的该数值可能与实际可下载字节数不同。
 
 ```bash
 # 使用 JSON 读取源码和元数据，或只把源码写到标准输出。
@@ -49,7 +54,10 @@ omnicorectl rapid patch T_ROB1 MainModule 8 1 8 40 \
 ## 模块与程序生命周期
 
 `deploy` 组合文件上传、模块加载、任务链接、构建诊断、失败恢复和暂存文件清理。
-`load` 用于加载已经存在于控制器文件系统中的文件。
+模块加载完成后，无论源码读回、UTF-8 解码、构建请求还是诊断读取失败，都会像源码
+不一致或构建诊断一样触发回滚：新模块会被卸载，被替换的模块会使用 change-count
+保护恢复原源码。回滚或暂存文件清理失败不会掩盖最初的部署错误。`load` 用于加载
+已经存在于控制器文件系统中的文件。
 
 ```bash
 omnicorectl rapid deploy T_ROB1 ./MainModule.mod --replace --yes
@@ -66,6 +74,10 @@ omnicorectl rapid program set-name T_ROB1 Production --yes
 omnicorectl rapid program set-entrypoint T_ROB1 main --yes
 omnicorectl rapid program unload T_ROB1 --yes
 ```
+
+如果任务只加载了独立模块而没有整套 `.pgf` program resource，RW8.1 的
+`program info` 可能返回 HTTP 204。工具会将其报告为“未加载整套程序”
+（`--json` 输出 `null`），而不是 JSON 协议错误。
 
 ## 源码导航与在线数据
 

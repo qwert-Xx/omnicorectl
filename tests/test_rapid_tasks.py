@@ -4,6 +4,7 @@ import unittest
 
 import httpx
 
+from omnicorectl.errors import ProtocolError
 from omnicorectl.rws import RwsClient
 from omnicorectl.services.rapid import RapidService
 
@@ -134,6 +135,93 @@ class RapidTasksTests(unittest.TestCase):
         self.assertEqual(module.source, source_text)
         self.assertEqual(module.change_count, 421455)
         self.assertEqual(module.reported_length, 52)
+
+    def test_reads_rw81_module_source_from_temporary_file(self) -> None:
+        source_text = "MODULE TestModule\n    ! 文件回读\nENDMODULE\n"
+        calls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            calls.append(request.url.path)
+            if request.url.path.endswith("/TestModule/text"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "state": [
+                            {
+                                "_type": "rap-module-text",
+                                "change-count": "421458",
+                                "file-path": "/TEMP/pus res.007541",
+                                # RW8.1 can report a length different from the
+                                # downloadable UTF-8 byte count.
+                                "module-length": "1368",
+                            }
+                        ]
+                    },
+                )
+            if request.url.path == "/fileservice/TEMP/pus res.007541":
+                self.assertIn("pus%20res.007541", str(request.url))
+                return httpx.Response(
+                    200, content=b"\xef\xbb\xbf" + source_text.encode("utf-8")
+                )
+            self.fail(f"unexpected request: {request.url.path}")
+
+        with RwsClient(
+            "192.0.2.1",
+            "test-user",
+            "test-password",
+            transport=httpx.MockTransport(handler),
+            request_interval=0,
+        ) as client:
+            module = RapidService(client).get_module_source("T_ROB1", "TestModule")
+
+        self.assertEqual(module.source, source_text)
+        self.assertEqual(module.change_count, 421458)
+        self.assertEqual(module.reported_length, 1368)
+        self.assertEqual(
+            calls,
+            [
+                "/rw/rapid/tasks/T_ROB1/modules/TestModule/text",
+                "/fileservice/TEMP/pus res.007541",
+            ],
+        )
+
+    def test_rejects_invalid_or_non_utf8_module_source_file(self) -> None:
+        cases = (
+            ("/TEMP/../secret", b"", "invalid file path"),
+            ("/TEMP/pusres.1", b"\xff\xfe", "not valid UTF-8"),
+        )
+        for file_path, content, message in cases:
+            with self.subTest(file_path=file_path):
+
+                def handler(request: httpx.Request) -> httpx.Response:
+                    if request.url.path == "/logout":
+                        return httpx.Response(200, json={})
+                    if request.url.path.endswith("/TestModule/text"):
+                        return httpx.Response(
+                            200,
+                            json={
+                                "state": [
+                                    {
+                                        "change-count": "1",
+                                        "file-path": file_path,
+                                        "module-length": "2",
+                                    }
+                                ]
+                            },
+                        )
+                    return httpx.Response(200, content=content)
+
+                with RwsClient(
+                    "192.0.2.1",
+                    "test-user",
+                    "test-password",
+                    transport=httpx.MockTransport(handler),
+                    request_interval=0,
+                ) as client:
+                    with self.assertRaisesRegex(ProtocolError, message):
+                        RapidService(client).get_module_source("T_ROB1", "TestModule")
 
 
 if __name__ == "__main__":

@@ -73,7 +73,22 @@ class RwsClient:
     def get_json(
         self, path: str, *, params: dict[str, str] | None = None
     ) -> dict[str, Any]:
+        payload = self.get_optional_json(path, params=params)
+        if payload is None:
+            raise ProtocolError(f"{path}: controller did not return JSON")
+        return payload
+
+    def get_optional_json(
+        self, path: str, *, params: dict[str, str] | None = None
+    ) -> dict[str, Any] | None:
+        """Read JSON while accepting a successful empty response.
+
+        读取 JSON，同时接受成功但正文为空的响应。
+        """
+
         response = self._request("GET", path, params=params)
+        if not response.content:
+            return None
         try:
             payload = response.json()
         except ValueError as exc:

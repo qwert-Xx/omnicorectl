@@ -21,6 +21,27 @@ from omnicorectl.services.control_station import RemoteControlStation
 
 
 class RapidCliTests(unittest.TestCase):
+    def test_program_info_handles_no_whole_program_resource(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            self.assertEqual(request.url.path, "/rw/rapid/tasks/T_ROB1/program")
+            return httpx.Response(204)
+
+        outputs: dict[str, str] = {}
+        for label, extra in (("text", []), ("json", ["--json"])):
+            with self.subTest(output=label):
+                args = build_parser().parse_args(
+                    ["rapid", "program", "info", "T_ROB1", *extra]
+                )
+                stdout = io.StringIO()
+                with _client(handler) as client, contextlib.redirect_stdout(stdout):
+                    dispatch_rapid(client, args, _unexpected_station)
+                outputs[label] = stdout.getvalue().strip()
+
+        self.assertEqual(outputs["text"], "No whole RAPID program is loaded in T_ROB1.")
+        self.assertEqual(outputs["json"], "null")
+
     def test_start_scopes_motion_control_inside_write_access(self) -> None:
         station_id = "12345678-1234-5678-9abc-123456789abc"
         motion_enabled = False

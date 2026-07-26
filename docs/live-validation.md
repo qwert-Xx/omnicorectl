@@ -36,6 +36,15 @@ program pointer exists. Compatibility handling and sanitized fixtures cover all
 three shapes. No execution start, program-pointer movement, target modification,
 or robot motion was performed during this read-only validation.
 
+On 2026-07-26, a read-only check confirmed two additional RW8.1 response
+variants. A complete module source response contained `change-count`,
+`file-path`, and `module-length`, but no `module-text`; the referenced
+FileService object was downloadable. Its reported module length was 1,368 while
+the downloaded UTF-8 file was 1,802 bytes, so source decoding intentionally
+uses the complete file rather than truncating to the metadata value. The whole
+program resource returned HTTP 204 for a task composed of independently loaded
+modules. No write access was requested and no controller state changed.
+
 ## Reversible file write
 
 A unique `$TEMP` probe exercised this workflow:

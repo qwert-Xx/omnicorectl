@@ -221,6 +221,18 @@ class RapidMutationTests(unittest.TestCase):
         self.assertEqual(forms[0][1]["progpath"], ["$HOME/app.pgf"])
         self.assertEqual(forms[2][1]["name"], ["NewName"])
 
+    def test_no_content_means_no_whole_program_is_loaded(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            self.assertEqual(request.url.path, "/rw/rapid/tasks/T_ROB1/program")
+            return httpx.Response(204)
+
+        with _client(handler) as client:
+            program = RapidService(client).get_program("T_ROB1")
+
+        self.assertIsNone(program)
+
 
 def _client(handler: object) -> RwsClient:
     return RwsClient(

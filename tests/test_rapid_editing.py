@@ -11,6 +11,7 @@ from omnicorectl.services.rapid import (
     BuildError,
     ModuleChange,
     ModuleLoadResult,
+    RapidModule,
     ModuleSource,
     RapidService,
 )
@@ -94,6 +95,27 @@ class RapidEditingTests(unittest.TestCase):
         )
         self.assertEqual(rapid.build_task.call_count, 2)
 
+    def test_write_readback_error_restores_original_module(self) -> None:
+        rapid = create_autospec(RapidService, instance=True)
+        rapid.get_module_source.side_effect = [
+            ModuleSource("T_ROB1", "MainModule", 7, len(ORIGINAL), ORIGINAL),
+            ProtocolError("temporary source file unavailable"),
+        ]
+        rapid.set_module_text.return_value = ModuleChange(
+            "T_ROB1", "MainModule", True, False, "", 7, 8
+        )
+        rapid.get_build_errors.return_value = []
+
+        with self.assertRaisesRegex(
+            ProtocolError, "temporary source file unavailable.*restored"
+        ):
+            RapidEditingService(rapid).write_module("T_ROB1", "MainModule", UPDATED)
+
+        rapid.set_module_text.assert_called_with(
+            "T_ROB1", "MainModule", ORIGINAL, expected_change_count=8
+        )
+        rapid.build_task.assert_called_once_with("T_ROB1")
+
     def test_concurrent_change_is_rejected_before_write(self) -> None:
         rapid = create_autospec(RapidService, instance=True)
         rapid.get_module_source.return_value = ModuleSource(
@@ -133,6 +155,36 @@ class RapidEditingTests(unittest.TestCase):
 
         rapid.set_module_text.assert_called_once_with(
             "T_ROB1", "MainModule", ORIGINAL, expected_change_count=9
+        )
+        rapid.build_task.assert_called_once_with("T_ROB1")
+
+    def test_patch_readback_error_restores_original_module(self) -> None:
+        rapid = create_autospec(RapidService, instance=True)
+        rapid.get_module_source.side_effect = [
+            ModuleSource("T_ROB1", "MainModule", 7, len(ORIGINAL), ORIGINAL),
+            ProtocolError("temporary source file unavailable"),
+        ]
+        rapid.set_text_range.return_value = ModuleChange(
+            "T_ROB1", "MainModule", True, False, "", 7, 8
+        )
+        rapid.get_build_errors.return_value = []
+
+        with self.assertRaisesRegex(
+            ProtocolError, "temporary source file unavailable.*restored"
+        ):
+            RapidEditingService(rapid).patch_module(
+                "T_ROB1",
+                "MainModule",
+                replace_mode="After",
+                start_row=2,
+                start_column=1,
+                end_row=2,
+                end_column=10,
+                text="    ! comment\n",
+            )
+
+        rapid.set_module_text.assert_called_with(
+            "T_ROB1", "MainModule", ORIGINAL, expected_change_count=8
         )
         rapid.build_task.assert_called_once_with("T_ROB1")
 
@@ -197,6 +249,113 @@ class RapidEditingTests(unittest.TestCase):
 
         rapid.unload_module.assert_called_once_with("T_ROB1", "MainModule")
         rapid.build_task.assert_called_once_with("T_ROB1")
+        files.delete_file.assert_called_once_with("$TEMP/MainModule.mod")
+
+    def test_deploy_readback_error_restores_replaced_module(self) -> None:
+        rapid = create_autospec(RapidService, instance=True)
+        files = create_autospec(FileService, instance=True)
+        rapid.list_modules.return_value = [
+            RapidModule("T_ROB1", "MainModule", "ProgMod")
+        ]
+        rapid.get_module_source.side_effect = [
+            ModuleSource("T_ROB1", "MainModule", 7, len(ORIGINAL), ORIGINAL),
+            ProtocolError("temporary source file unavailable"),
+        ]
+        rapid.load_module.return_value = ModuleLoadResult(
+            "T_ROB1", "$TEMP/MainModule.mod", "MainModule", True
+        )
+        rapid.get_change_count.return_value = 8
+        rapid.get_build_errors.return_value = []
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "MainModule.mod"
+            source.write_text(UPDATED, encoding="utf-8")
+            files.upload_file.return_value = UploadResult(
+                str(source), "/$TEMP/MainModule.mod", len(UPDATED.encode())
+            )
+            with self.assertRaisesRegex(
+                ProtocolError, "temporary source file unavailable.*restored"
+            ):
+                RapidEditingService(rapid, files).deploy_module(
+                    "T_ROB1",
+                    source,
+                    "$TEMP/MainModule.mod",
+                    replace=True,
+                    remove_upload=True,
+                )
+
+        rapid.set_module_text.assert_called_once_with(
+            "T_ROB1", "MainModule", ORIGINAL, expected_change_count=8
+        )
+        rapid.build_task.assert_called_once_with("T_ROB1")
+        files.delete_file.assert_called_once_with("$TEMP/MainModule.mod")
+
+    def test_deploy_build_request_error_unloads_new_module(self) -> None:
+        rapid = create_autospec(RapidService, instance=True)
+        files = create_autospec(FileService, instance=True)
+        rapid.list_modules.return_value = []
+        rapid.load_module.return_value = ModuleLoadResult(
+            "T_ROB1", "$TEMP/MainModule.mod", "MainModule", False
+        )
+        rapid.get_module_source.return_value = ModuleSource(
+            "T_ROB1", "MainModule", 8, len(ORIGINAL), ORIGINAL
+        )
+        rapid.build_task.side_effect = [
+            ProtocolError("build request failed"),
+            None,
+        ]
+        rapid.get_build_errors.return_value = []
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "MainModule.mod"
+            source.write_text(ORIGINAL, encoding="utf-8")
+            files.upload_file.return_value = UploadResult(
+                str(source), "/$TEMP/MainModule.mod", len(ORIGINAL.encode())
+            )
+            with self.assertRaisesRegex(
+                ProtocolError, "build request failed.*restored"
+            ):
+                RapidEditingService(rapid, files).deploy_module(
+                    "T_ROB1",
+                    source,
+                    "$TEMP/MainModule.mod",
+                )
+
+        rapid.unload_module.assert_called_once_with("T_ROB1", "MainModule")
+        self.assertEqual(rapid.build_task.call_count, 2)
+
+    def test_deploy_preserves_verification_error_when_rollback_and_cleanup_fail(
+        self,
+    ) -> None:
+        rapid = create_autospec(RapidService, instance=True)
+        files = create_autospec(FileService, instance=True)
+        rapid.list_modules.return_value = []
+        rapid.load_module.return_value = ModuleLoadResult(
+            "T_ROB1", "$TEMP/MainModule.mod", "MainModule", False
+        )
+        rapid.get_module_source.side_effect = ProtocolError(
+            "temporary source file unavailable"
+        )
+        rapid.unload_module.side_effect = ProtocolError("unload failed")
+        files.delete_file.side_effect = ProtocolError("cleanup failed")
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "MainModule.mod"
+            source.write_text(ORIGINAL, encoding="utf-8")
+            files.upload_file.return_value = UploadResult(
+                str(source), "/$TEMP/MainModule.mod", len(ORIGINAL.encode())
+            )
+            with self.assertRaisesRegex(
+                ProtocolError,
+                "temporary source file unavailable.*rollback failed",
+            ):
+                RapidEditingService(rapid, files).deploy_module(
+                    "T_ROB1",
+                    source,
+                    "$TEMP/MainModule.mod",
+                    remove_upload=True,
+                )
+
         files.delete_file.assert_called_once_with("$TEMP/MainModule.mod")
 
 

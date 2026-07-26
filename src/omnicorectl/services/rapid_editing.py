@@ -9,12 +9,18 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from omnicorectl.errors import ConfigurationError, ProtocolError, RapidBuildError
+from omnicorectl.errors import (
+    ConfigurationError,
+    OmnicoreError,
+    ProtocolError,
+    RapidBuildError,
+)
 from omnicorectl.services.files import FileService
 from omnicorectl.services.rapid import (
     BuildError,
     ModuleChange,
     ModuleLoadResult,
+    ModuleSource,
     RapidService,
 )
 
@@ -107,13 +113,23 @@ class RapidEditingService:
             expected_change_count=original.change_count,
         )
         current_module = change.new_module_name or module
-        written = self._rapid.get_module_source(task, current_module)
-        if written.source != source:
+        written: ModuleSource | None = None
+        try:
+            written = self._rapid.get_module_source(task, current_module)
+            if written.source != source:
+                raise ProtocolError("readback differs from requested source")
+            diagnostics = self._build_and_diagnose(task) if build else ()
+        except OmnicoreError as exc:
+            current_change_count = (
+                written.change_count
+                if written is not None
+                else change.change_count_after
+            )
             rolled_back = self._restore_source(
                 task,
                 current_module,
                 original.source,
-                written.change_count,
+                current_change_count,
                 rollback_on_error=rollback_on_error,
             )
             state = (
@@ -122,10 +138,9 @@ class RapidEditingService:
                 else "rollback failed or disabled"
             )
             raise ProtocolError(
-                f"RAPID write readback differs from requested source for "
-                f"{task}/{current_module}; {state}"
-            )
-        diagnostics = self._build_and_diagnose(task) if build else ()
+                f"RAPID write verification failed for {task}/{current_module}: "
+                f"{exc}; {state}"
+            ) from exc
         if diagnostics:
             self._raise_after_optional_rollback(
                 task,
@@ -177,20 +192,27 @@ class RapidEditingService:
             expected_change_count=original.change_count,
         )
         current_module = change.new_module_name or module
-        written = self._rapid.get_module_source(task, current_module)
+        written: ModuleSource | None = None
         try:
+            written = self._rapid.get_module_source(task, current_module)
             validate_module_source(written.source)
             if written.change_count != change.change_count_after:
                 raise ProtocolError(
                     f"response change count {change.change_count_after}, "
                     f"readback {written.change_count}"
                 )
-        except (ConfigurationError, ProtocolError) as exc:
+            diagnostics = self._build_and_diagnose(task) if build else ()
+        except OmnicoreError as exc:
+            current_change_count = (
+                written.change_count
+                if written is not None
+                else change.change_count_after
+            )
             rolled_back = self._restore_source(
                 task,
                 current_module,
                 original.source,
-                written.change_count,
+                current_change_count,
                 rollback_on_error=rollback_on_error,
             )
             state = (
@@ -202,7 +224,6 @@ class RapidEditingService:
                 f"RAPID patch verification failed for {task}/{current_module}: "
                 f"{exc}; {state}"
             ) from exc
-        diagnostics = self._build_and_diagnose(task) if build else ()
         if diagnostics:
             self._raise_after_optional_rollback(
                 task,
@@ -257,15 +278,26 @@ class RapidEditingService:
         upload = self._files.upload_file(source_path, remote_path, overwrite=True)
         loaded: ModuleLoadResult | None = None
         removed = False
+        operation_failed = False
         try:
             loaded = self._rapid.load_module(task, remote_path, replace=replace)
             current_name = loaded.module or validation.module_name
-            loaded_source = self._rapid.get_module_source(task, current_name)
-            if loaded_source.source != source:
+            loaded_source: ModuleSource | None = None
+            try:
+                loaded_source = self._rapid.get_module_source(task, current_name)
+                if loaded_source.source != source:
+                    raise ProtocolError("readback differs from local source")
+                diagnostics = self._build_and_diagnose(task) if build else ()
+            except OmnicoreError as exc:
                 rolled_back = self._rollback_deploy(
                     task,
                     current_name,
                     original_source,
+                    current_change_count=(
+                        loaded_source.change_count
+                        if loaded_source is not None
+                        else None
+                    ),
                     rollback_on_error=rollback_on_error,
                 )
                 state = (
@@ -274,15 +306,16 @@ class RapidEditingService:
                     else "rollback failed or disabled"
                 )
                 raise ProtocolError(
-                    f"deployed RAPID module readback differs from local source for "
-                    f"{task}/{current_name}; {state}"
-                )
-            diagnostics = self._build_and_diagnose(task) if build else ()
+                    f"RAPID deployment verification failed for {task}/{current_name}: "
+                    f"{exc}; {state}"
+                ) from exc
             if diagnostics:
+                assert loaded_source is not None
                 rolled_back = self._rollback_deploy(
                     task,
                     current_name,
                     original_source,
+                    current_change_count=loaded_source.change_count,
                     rollback_on_error=rollback_on_error,
                 )
                 raise RapidBuildError(
@@ -301,10 +334,17 @@ class RapidEditingService:
                 diagnostics=diagnostics,
                 upload_removed=remove_upload,
             )
+        except BaseException:
+            operation_failed = True
+            raise
         finally:
             if remove_upload:
-                self._files.delete_file(remote_path)
-                removed = True
+                try:
+                    self._files.delete_file(remote_path)
+                    removed = True
+                except OmnicoreError:
+                    if not operation_failed:
+                        raise
             # Keep this explicit so future result extensions cannot report cleanup
             # before it happened. / 保持显式赋值，避免未来扩展过早报告清理完成。
             _ = removed
@@ -315,16 +355,29 @@ class RapidEditingService:
         current_name: str,
         original_source: str | None,
         *,
+        current_change_count: int | None,
         rollback_on_error: bool,
     ) -> bool:
         if not rollback_on_error:
             return False
-        if original_source is not None:
-            self._rapid.set_module_text(task, current_name, original_source)
-        else:
-            self._rapid.unload_module(task, current_name)
-        self._rapid.build_task(task)
-        return not self._rapid.get_build_errors(task)
+        try:
+            if original_source is not None:
+                if current_change_count is None:
+                    current_change_count = self._rapid.get_change_count(
+                        task, current_name
+                    )
+                self._rapid.set_module_text(
+                    task,
+                    current_name,
+                    original_source,
+                    expected_change_count=current_change_count,
+                )
+            else:
+                self._rapid.unload_module(task, current_name)
+            self._rapid.build_task(task)
+            return not self._rapid.get_build_errors(task)
+        except OmnicoreError:
+            return False
 
     def _build_and_diagnose(self, task: str) -> tuple[BuildError, ...]:
         self._rapid.build_task(task)
@@ -364,14 +417,17 @@ class RapidEditingService:
     ) -> bool:
         if not rollback_on_error:
             return False
-        self._rapid.set_module_text(
-            task,
-            current_module,
-            original_source,
-            expected_change_count=current_change_count,
-        )
-        self._rapid.build_task(task)
-        return not self._rapid.get_build_errors(task)
+        try:
+            self._rapid.set_module_text(
+                task,
+                current_module,
+                original_source,
+                expected_change_count=current_change_count,
+            )
+            self._rapid.build_task(task)
+            return not self._rapid.get_build_errors(task)
+        except OmnicoreError:
+            return False
 
 
 def validate_module_source(

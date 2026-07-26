@@ -19,8 +19,8 @@ read source and change count
   -> acquire bounded Control Station write access
   -> verify the change count again
   -> write with implicit RAPID Mastership
-  -> link the task and read controller build errors
-  -> restore the original source and rebuild if diagnostics are returned
+  -> read back the exact source, link the task, and read build errors
+  -> restore the original source and rebuild after any verification/build failure
   -> release write access even when an operation fails
 ```
 
@@ -28,6 +28,13 @@ read source and change count
 individual guards and must be selected explicitly. `--dry-run` performs local
 validation and displays the diff without requesting write access. Use
 `--if-change-count N` in automation to reject stale edits.
+
+Complete source reads accept both RobotWare response forms: an inline
+`module-text` field and the RW8.1 `file-path` reference to a temporary
+FileService object. Temporary source files are downloaded as strict UTF-8
+(with an optional BOM). The controller's `module-length` is retained as
+metadata but is not used to truncate source because RW8.1 can report a value
+different from the downloadable byte count.
 
 ```bash
 # Checkout with metadata in JSON, or source only through stdout.
@@ -51,8 +58,12 @@ omnicorectl rapid patch T_ROB1 MainModule 8 1 8 40 \
 ## Module and program lifecycle
 
 `deploy` combines file upload, module loading, task linking, build diagnostics,
-rollback, and staging-file cleanup. `load` operates on a file that already
-exists in the controller file system.
+rollback, and staging-file cleanup. After a module has been loaded, a source
+readback, decoding, build request, or diagnostic-read failure triggers the same
+rollback as a source mismatch or build diagnostic. A new module is unloaded;
+a replaced module is restored with a change-count guard. Rollback and cleanup
+failures do not hide the original deployment error. `load` operates on a file
+that already exists in the controller file system.
 
 ```bash
 omnicorectl rapid deploy T_ROB1 ./MainModule.mod --replace --yes
@@ -69,6 +80,11 @@ omnicorectl rapid program set-name T_ROB1 Production --yes
 omnicorectl rapid program set-entrypoint T_ROB1 main --yes
 omnicorectl rapid program unload T_ROB1 --yes
 ```
+
+RW8.1 can return HTTP 204 for `program info` when a task has independently
+loaded modules but no whole `.pgf` program resource. The command reports this
+as no whole program loaded (`null` with `--json`) instead of a JSON protocol
+error.
 
 ## Source navigation and online data
 

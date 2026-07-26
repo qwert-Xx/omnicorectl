@@ -626,7 +626,11 @@ def _dispatch_program(
 ) -> None:
     operation = args.operation
     if operation == "info":
-        print(format_rapid_data(rapid.get_program(args.task), as_json=args.as_json))
+        program = rapid.get_program(args.task)
+        if program is None and not args.as_json:
+            print(f"No whole RAPID program is loaded in {args.task}.")
+        else:
+            print(format_rapid_data(program, as_json=args.as_json))
         return
     _ensure_yes(args)
     if operation in {"load", "unload"}:

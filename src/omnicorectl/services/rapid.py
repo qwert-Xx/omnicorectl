@@ -5,6 +5,7 @@ RAPID 源码、程序、执行与调试资源。
 
 from __future__ import annotations
 
+import io
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
@@ -203,6 +204,14 @@ class RapidService:
             self._client.get_json(endpoint),
             resource=f"RAPID source {task}/{module}",
         )
+        raw_source = state.get("module-text")
+        if isinstance(raw_source, str):
+            source = raw_source
+        else:
+            file_path = required_text(
+                state, "file-path", resource="RAPID module source"
+            )
+            source = self._download_module_source(file_path)
         return ModuleSource(
             task=task,
             module=module,
@@ -212,8 +221,19 @@ class RapidService:
             reported_length=required_int(
                 state, "module-length", resource="RAPID module source"
             ),
-            source=required_text(state, "module-text", resource="RAPID module source"),
+            source=source,
         )
+
+    def _download_module_source(self, file_path: str) -> str:
+        endpoint = _controller_file_endpoint(file_path)
+        destination = io.BytesIO()
+        self._client.download(endpoint, destination)
+        try:
+            return destination.getvalue().decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise ProtocolError(
+                f"RAPID module source file is not valid UTF-8: {file_path}"
+            ) from exc
 
     def get_module_attributes(self, task: str, module: str) -> ModuleAttributes:
         endpoint = _module_endpoint(task, module)
@@ -575,10 +595,13 @@ class RapidService:
                 raise ProtocolError("RAPID build errors: next link did not advance")
             start += len(page)
 
-    def get_program(self, task: str) -> RapidProgram:
+    def get_program(self, task: str) -> RapidProgram | None:
         task_path = _segment(task, "task")
+        payload = self._client.get_optional_json(f"/rw/rapid/tasks/{task_path}/program")
+        if payload is None:
+            return None
         resources = _resources(
-            self._client.get_json(f"/rw/rapid/tasks/{task_path}/program"),
+            payload,
             resource=f"RAPID program {task}",
         )
         state = _find_resource(
@@ -672,6 +695,19 @@ def _module_endpoint(task: str, module: str, suffix: str = "") -> str:
         f"/rw/rapid/tasks/{_segment(task, 'task')}/modules/"
         f"{_segment(module, 'module')}{suffix}"
     )
+
+
+def _controller_file_endpoint(file_path: str) -> str:
+    if not file_path.startswith("/") or "\x00" in file_path:
+        raise ProtocolError(
+            f"RAPID module source returned an invalid file path: {file_path!r}"
+        )
+    segments = [segment for segment in file_path.split("/") if segment]
+    if not segments or any(segment in {".", ".."} for segment in segments):
+        raise ProtocolError(
+            f"RAPID module source returned an invalid file path: {file_path!r}"
+        )
+    return "/fileservice/" + "/".join(quote(segment, safe="") for segment in segments)
 
 
 def _resources(payload: dict[str, Any], *, resource: str) -> list[dict[str, Any]]:
