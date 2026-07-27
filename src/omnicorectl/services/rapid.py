@@ -22,6 +22,7 @@ from omnicorectl.rws.hal import (
     required_text,
     state_resources,
 )
+from omnicorectl.rws.progress import ProgressService
 
 _IMPLICIT_MASTERSHIP = {"mastership": "implicit"}
 
@@ -97,10 +98,10 @@ class ModifiablePositionRange:
     task: str
     module: str
     count: int
-    start_row: int
-    start_column: int
-    end_row: int
-    end_column: int
+    start_row: int | None
+    start_column: int | None
+    end_row: int | None
+    end_column: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +144,19 @@ class BuildError:
 class RapidProgram:
     task: str
     name: str
+    entry_point: str
+
+
+@dataclass(frozen=True, slots=True)
+class ProgramLoadResult:
+    task: str
+    program_path: str
+    load_mode: str
+    status_code: int
+    progress_uri: str | None
+    progress_state: str | None
+    progress_code: str | None
+    program_name: str
     entry_point: str
 
 
@@ -398,10 +412,17 @@ class RapidService:
             ),
             resource=f"RAPID modifiable positions {task}/{module}",
         )
+        count = required_int(
+            state, "no_lines_modifiable", resource="modifiable positions"
+        )
+        if count < 0:
+            raise ProtocolError(f"modifiable positions: invalid negative count {count}")
+        if count == 0:
+            return ModifiablePositionRange(task, module, count, None, None, None, None)
         return ModifiablePositionRange(
             task,
             module,
-            required_int(state, "no_lines_modifiable", resource="modifiable positions"),
+            count,
             required_int(state, "start_row", resource="modifiable positions"),
             required_int(state, "start_col", resource="modifiable positions"),
             required_int(state, "end_row", resource="modifiable positions"),
@@ -614,17 +635,58 @@ class RapidService:
         )
 
     def load_program(
-        self, task: str, program_path: str, *, replace: bool = False
-    ) -> RapidAction:
+        self,
+        task: str,
+        program_path: str,
+        *,
+        replace: bool = False,
+        wait_timeout: float = 120.0,
+        poll_interval: float = 0.25,
+    ) -> ProgramLoadResult:
         if not program_path.strip():
             raise ConfigurationError("RAPID program path cannot be empty")
         task_path = _segment(task, "task")
-        self._client.post_form(
+        load_mode = "replace" if replace else "add"
+        outcome = self._client.post_form_outcome(
             f"/rw/rapid/tasks/{task_path}/program/load",
-            {"progpath": program_path, "replace": _bool_text(replace)},
+            {
+                "progpath": program_path,
+                "loadmode": load_mode,
+            },
             params=_IMPLICIT_MASTERSHIP,
         )
-        return RapidAction(task, "load-program", program_path)
+        progress_state: str | None = None
+        progress_code: str | None = None
+        if outcome.progress_uri is not None:
+            progress = ProgressService(self._client).wait(
+                outcome.progress_uri,
+                timeout=wait_timeout,
+                poll_interval=poll_interval,
+            )
+            progress_state = progress.state
+            progress_code = progress.code
+            if progress.state.lower() != "ready":
+                raise ProtocolError(
+                    "RAPID program load failed: "
+                    f"state={progress.state!r}, code={progress.code!r}"
+                )
+        program = self.get_program(task)
+        if program is None:
+            raise ProtocolError(
+                f"RAPID program load returned HTTP {outcome.status_code}, "
+                f"but no program is loaded in {task}"
+            )
+        return ProgramLoadResult(
+            task=task,
+            program_path=program_path,
+            load_mode=load_mode,
+            status_code=outcome.status_code,
+            progress_uri=outcome.progress_uri,
+            progress_state=progress_state,
+            progress_code=progress_code,
+            program_name=program.name,
+            entry_point=program.entry_point,
+        )
 
     def unload_program(self, task: str) -> RapidAction:
         task_path = _segment(task, "task")

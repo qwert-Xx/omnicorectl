@@ -17,7 +17,11 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from omnicorectl.errors import ConfigurationError
+from omnicorectl.errors import (
+    AuthorizationError,
+    ConfigurationError,
+    ControllerStateError,
+)
 from omnicorectl.output import (
     format_breakpoints,
     format_build_errors,
@@ -540,7 +544,22 @@ def _dispatch_source_edit(
             f"{original.change_count}"
         )
     if args.dry_run:
-        print(diff or "No changes.")
+        if args.as_json:
+            print(
+                format_rapid_data(
+                    {
+                        "task": args.task,
+                        "module": args.module,
+                        "dry_run": True,
+                        "changed": bool(diff),
+                        "change_count": original.change_count,
+                        "diff": diff,
+                    },
+                    as_json=True,
+                )
+            )
+        else:
+            print(diff or "No changes.")
         return
     _ensure_yes(args)
     if not diff:
@@ -633,24 +652,32 @@ def _dispatch_program(
             print(format_rapid_data(program, as_json=args.as_json))
         return
     _ensure_yes(args)
-    if operation in {"load", "unload"}:
+    if operation == "load":
+        _ensure_stopped(client, args)
+        with _write_access(client, station_factory):
+            load_result = rapid.load_program(
+                args.task,
+                args.program_path,
+                replace=args.replace,
+                wait_timeout=args.wait_timeout,
+                poll_interval=args.poll_interval,
+            )
+        print(format_rapid_data(load_result, as_json=args.as_json))
+        return
+    if operation == "unload":
         _ensure_stopped(client, args)
     with _write_access(client, station_factory):
-        if operation == "load":
-            result = rapid.load_program(
-                args.task, args.program_path, replace=args.replace
-            )
-        elif operation == "unload":
-            result = rapid.unload_program(args.task)
+        if operation == "unload":
+            action = rapid.unload_program(args.task)
         elif operation == "save":
-            result = rapid.save_program(args.task, args.path)
+            action = rapid.save_program(args.task, args.path)
         elif operation == "set-name":
-            result = rapid.set_program_name(args.task, args.name)
+            action = rapid.set_program_name(args.task, args.name)
         elif operation == "set-entrypoint":
-            result = rapid.set_entry_point(args.task, args.routine)
+            action = rapid.set_entry_point(args.task, args.routine)
         else:
             raise ConfigurationError(f"unsupported RAPID program command: {operation}")
-    print(format_rapid_action(result, as_json=args.as_json))
+    print(format_rapid_action(action, as_json=args.as_json))
 
 
 def _dispatch_execution(
@@ -660,20 +687,60 @@ def _dispatch_execution(
     station_factory: StationFactory,
 ) -> None:
     _ensure_yes(args)
+    if args.command == "start":
+        _ensure_rapid_startable(client)
     with _write_access(client, station_factory):
         if args.command == "start":
             with ControlStationService(client).motion_control():
-                result = debug.start_execution(
-                    execution_mode=args.mode,
-                    cycle=args.cycle,
-                    stop_at_breakpoint=not args.ignore_breakpoints,
-                    all_tasks_by_task_panel=args.all_tasks,
-                )
+                try:
+                    result = debug.start_execution(
+                        execution_mode=args.mode,
+                        cycle=args.cycle,
+                        stop_at_breakpoint=not args.ignore_breakpoints,
+                        all_tasks_by_task_panel=args.all_tasks,
+                    )
+                except AuthorizationError as exc:
+                    _raise_start_state_error(client, cause=exc)
+                    raise
         elif args.command == "stop":
             result = debug.stop_execution(stop_mode=args.mode, all_tasks=args.all_tasks)
         else:
             result = debug.reset_all_program_pointers()
     print(format_rapid_action(result, as_json=args.as_json))
+
+
+def _ensure_rapid_startable(client: RwsClient) -> None:
+    controller = ControllerService(client)
+    mode = controller.operation_mode()
+    if mode.lower() != "auto":
+        raise ControllerStateError(
+            f"cannot start RAPID remotely: operation mode is {mode!r}, expected 'AUTO'"
+        )
+    state = controller.controller_state()
+    if state != "motoron":
+        raise ControllerStateError(
+            f"cannot start RAPID remotely: controller state is {state!r}, "
+            "expected 'motoron'"
+        )
+
+
+def _raise_start_state_error(client: RwsClient, *, cause: AuthorizationError) -> None:
+    """Reclassify a denied start when state changed after the preflight.
+
+    当前置检查后状态发生变化时，重新归类被拒绝的启动请求。
+    """
+
+    controller = ControllerService(client)
+    mode = controller.operation_mode()
+    state = controller.controller_state()
+    if mode.lower() != "auto":
+        raise ControllerStateError(
+            f"RAPID start was denied because operation mode changed to {mode!r}"
+        ) from cause
+    if state != "motoron":
+        raise ControllerStateError(
+            f"RAPID start was denied because controller state changed to {state!r}"
+        ) from cause
 
 
 def _dispatch_program_pointer(
@@ -783,6 +850,8 @@ def _program_commands(commands: argparse._SubParsersAction) -> None:
     load.add_argument("task")
     load.add_argument("program_path")
     load.add_argument("--replace", action="store_true")
+    load.add_argument("--wait-timeout", type=_positive_float, default=120.0)
+    load.add_argument("--poll-interval", type=_positive_float, default=0.25)
     _write_options(load, allow_running=True)
     unload = commands.add_parser("unload")
     unload.add_argument("task")
@@ -1031,6 +1100,16 @@ def _positive_int(value: str) -> int:
     number = int(value)
     if number < 1:
         raise argparse.ArgumentTypeError("must be positive")
+    return number
+
+
+def _positive_float(value: str) -> float:
+    try:
+        number = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive number") from exc
+    if number <= 0:
+        raise argparse.ArgumentTypeError("must be a positive number")
     return number
 
 

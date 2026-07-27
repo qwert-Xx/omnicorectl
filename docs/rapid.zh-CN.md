@@ -27,6 +27,9 @@
 放宽安全保护，必须显式指定。`--dry-run` 只执行本地校验并显示差异，不申请写权限。
 自动化调用应使用 `--if-change-count N` 拒绝过期修改。
 
+源码编辑 dry-run 使用 `--json` 时只输出一个包含 `changed`、`change_count` 和
+`diff` 的 JSON 对象，不会把文本差异混入 JSON，也不会申请写权限。
+
 完整源码读取兼容 RobotWare 的两种响应：直接返回 `module-text`，或由 RW8.1 返回
 指向 FileService 临时文件的 `file-path`。临时源码按严格 UTF-8 下载，并允许可选
 BOM。工具会保留控制器的 `module-length` 作为元数据，但不会用它截断源码，因为
@@ -40,6 +43,7 @@ omnicorectl rapid validate MainModule.mod --expected-module MainModule --json
 
 # 先预览，再应用同一个文件。
 omnicorectl rapid write T_ROB1 MainModule MainModule.mod --dry-run
+omnicorectl rapid write T_ROB1 MainModule MainModule.mod --dry-run --json
 omnicorectl rapid write T_ROB1 MainModule MainModule.mod \
   --if-change-count 421455 --backup MainModule.before.mod --yes
 
@@ -59,6 +63,10 @@ omnicorectl rapid patch T_ROB1 MainModule 8 1 8 40 \
 保护恢复原源码。回滚或暂存文件清理失败不会掩盖最初的部署错误。`load` 用于加载
 已经存在于控制器文件系统中的文件。
 
+整程序加载同时兼容同步完成的 HTTP 204 和异步接受的 HTTP 202。异步响应会校验
+返回的 `/progress/{id}` URI，持续轮询到完成，然后回读已加载程序。
+`--wait-timeout` 和 `--poll-interval` 用于限制等待时间和轮询间隔。
+
 ```bash
 omnicorectl rapid deploy T_ROB1 ./MainModule.mod --replace --yes
 omnicorectl rapid load T_ROB1 '$HOME/MainModule.modx' --replace --yes
@@ -68,7 +76,8 @@ omnicorectl rapid build T_ROB1 --yes
 omnicorectl rapid errors T_ROB1 --json
 
 omnicorectl rapid program info T_ROB1 --json
-omnicorectl rapid program load T_ROB1 '$HOME/application.pgf' --replace --yes
+omnicorectl rapid program load T_ROB1 '$HOME/application.pgf' --replace \
+  --wait-timeout 120 --poll-interval 0.25 --yes
 omnicorectl rapid program save T_ROB1 '$HOME/application' --yes
 omnicorectl rapid program set-name T_ROB1 Production --yes
 omnicorectl rapid program set-entrypoint T_ROB1 main --yes
@@ -133,6 +142,8 @@ omnicorectl rapid breakpoint clear T_ROB1 --all --yes
 Motion Control。启动请求结束后，即使请求失败，也会再次关闭并确认 Motion Control。
 已认证用户仍需具备相应的 RAPID 执行权限和自动模式远程启停权限，控制器也必须已启用
 外部控制。
+申请写权限前，命令会验证 `AUTO` 模式和 `motoron` 状态。如果后续启动请求被控制器
+拒绝，工具会再次读取这两个状态，避免把安全状态变化误报成缺少权限。
 
 `modify-position` 使用机器人的当前位置更新运动目标，并有额外的 RobotWare 前置条件。
 `write`、`edit` 或 `deploy` 绝不会隐式调用它。
@@ -143,6 +154,9 @@ omnicorectl rapid modify-position T_ROB1 MainModule 15 1 15 80 --yes
 omnicorectl rapid activate-task T_ROB1 --yes
 omnicorectl rapid deactivate-task T_ROB1 --yes
 ```
+
+如果指定范围内没有可修改的运动目标，RW8.1 可能省略全部四个位置字段。工具会返回
+`count: 0` 和值为 `null` 的位置，而不会把这个有效空结果误报为协议错误。
 
 ## 退出行为
 

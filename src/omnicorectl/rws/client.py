@@ -8,6 +8,7 @@ from __future__ import annotations
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from typing import Any, BinaryIO
 from urllib.parse import urlsplit
 
@@ -23,6 +24,17 @@ from omnicorectl.errors import (
 
 HAL_JSON_V2 = "application/hal+json;v=2.0"
 FORM_V2 = "application/x-www-form-urlencoded;v=2.0"
+
+
+@dataclass(frozen=True, slots=True)
+class FormActionOutcome:
+    """HTTP outcome for a successful RWS form action.
+
+    成功 RWS 表单操作的 HTTP 结果。
+    """
+
+    status_code: int
+    progress_uri: str | None
 
 
 class RwsClient:
@@ -126,13 +138,35 @@ class RwsClient:
         *,
         params: dict[str, str] | None = None,
     ) -> None:
-        self._request(
+        self.post_form_outcome(
+            path,
+            data,
+            params=params,
+        )
+
+    def post_form_outcome(
+        self,
+        path: str,
+        data: dict[str, str] | None = None,
+        *,
+        params: dict[str, str] | None = None,
+    ) -> FormActionOutcome:
+        """Submit a form while preserving synchronous/asynchronous completion.
+
+        提交表单，并保留同步或异步完成信息。
+        """
+
+        response = self._request(
             "POST",
             path,
             params=params,
             data=data or {},
             headers={"Content-Type": FORM_V2},
         )
+        progress_uri = (
+            _progress_uri(response, path) if response.status_code == 202 else None
+        )
+        return FormActionOutcome(response.status_code, progress_uri)
 
     def post_form_location(self, path: str, data: dict[str, str]) -> str:
         """Start an asynchronous form action and return its progress URI.
@@ -140,29 +174,14 @@ class RwsClient:
         启动异步表单操作并返回其进度 URI。
         """
 
-        response = self._request(
-            "POST",
-            path,
-            data=data,
-            headers={"Content-Type": FORM_V2},
-        )
-        if response.status_code != 202:
+        outcome = self.post_form_outcome(path, data)
+        if outcome.status_code != 202:
             raise ProtocolError(
                 f"{path}: expected HTTP 202 for asynchronous operation, "
-                f"got {response.status_code}"
+                f"got {outcome.status_code}"
             )
-        location = response.headers.get("Location")
-        if not location:
-            raise ProtocolError(f"{path}: asynchronous response has no Location header")
-        parsed = urlsplit(location)
-        progress_uri = parsed.path
-        if parsed.query:
-            progress_uri = f"{progress_uri}?{parsed.query}"
-        if not progress_uri.startswith("/progress/"):
-            raise ProtocolError(
-                f"{path}: unexpected asynchronous Location {location!r}"
-            )
-        return progress_uri
+        assert outcome.progress_uri is not None
+        return outcome.progress_uri
 
     def post_form_optional_json(
         self,
@@ -356,6 +375,19 @@ def _controller_error(response: httpx.Response) -> tuple[str, str]:
         elif element.attrib.get("class") == "msg":
             message = _clean_detail(element.text)
     return code, message
+
+
+def _progress_uri(response: httpx.Response, path: str) -> str:
+    location = response.headers.get("Location")
+    if not location:
+        raise ProtocolError(f"{path}: asynchronous response has no Location header")
+    parsed = urlsplit(location)
+    progress_uri = parsed.path
+    if parsed.query:
+        progress_uri = f"{progress_uri}?{parsed.query}"
+    if not progress_uri.startswith("/progress/"):
+        raise ProtocolError(f"{path}: unexpected asynchronous Location {location!r}")
+    return progress_uri
 
 
 def _clean_detail(value: object, *, limit: int = 500) -> str:

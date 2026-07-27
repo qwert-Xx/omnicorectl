@@ -5,12 +5,54 @@ from urllib.parse import parse_qs
 
 import httpx
 
-from omnicorectl.errors import ConfigurationError
+from omnicorectl.errors import ConfigurationError, ProtocolError
 from omnicorectl.rws import RwsClient
 from omnicorectl.services.rapid import RapidService
 
 
 class RapidMutationTests(unittest.TestCase):
+    def test_modifiable_positions_accepts_empty_rw81_shape(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            self.assertTrue(request.url.path.endswith("/mod-possible"))
+            return httpx.Response(
+                200,
+                json={"state": [{"no_lines_modifiable": "0"}]},
+            )
+
+        with _client(handler) as client:
+            result = RapidService(client).get_modifiable_positions(
+                "T_ROB1",
+                "MainModule",
+                start_row=1,
+                start_column=1,
+                end_row=20,
+                end_column=80,
+            )
+
+        self.assertEqual(result.count, 0)
+        self.assertIsNone(result.start_row)
+        self.assertIsNone(result.start_column)
+        self.assertIsNone(result.end_row)
+        self.assertIsNone(result.end_column)
+
+    def test_modifiable_positions_requires_coordinates_for_matches(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={"state": [{"no_lines_modifiable": "1"}]},
+            )
+
+        with _client(handler) as client:
+            with self.assertRaisesRegex(ProtocolError, "start_row"):
+                RapidService(client).get_modifiable_positions(
+                    "T_ROB1",
+                    "MainModule",
+                    start_row=1,
+                    start_column=1,
+                    end_row=20,
+                    end_column=80,
+                )
+
     def test_reads_module_metadata_and_searches_text(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             if request.url.path == "/rw/rapid/tasks/T_ROB1/modules/MainModule":
@@ -211,15 +253,99 @@ class RapidMutationTests(unittest.TestCase):
         with _client(handler) as client:
             service = RapidService(client)
             program = service.get_program("T_ROB1")
-            service.load_program("T_ROB1", "$HOME/app.pgf", replace=True)
+            loaded = service.load_program("T_ROB1", "$HOME/app.pgf", replace=True)
             service.save_program("T_ROB1", "$HOME/saved")
             service.set_program_name("T_ROB1", "NewName")
             service.set_entry_point("T_ROB1", "main2")
             service.unload_program("T_ROB1")
 
         self.assertEqual(program.entry_point, "main")
+        self.assertEqual(loaded.status_code, 204)
+        self.assertIsNone(loaded.progress_uri)
+        self.assertEqual(loaded.program_name, "Production")
         self.assertEqual(forms[0][1]["progpath"], ["$HOME/app.pgf"])
+        self.assertEqual(forms[0][1]["loadmode"], ["replace"])
         self.assertEqual(forms[2][1]["name"], ["NewName"])
+
+    def test_whole_program_load_waits_for_async_progress(self) -> None:
+        poll_count = 0
+        calls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal poll_count
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            calls.append(f"{request.method} {request.url.path}")
+            if request.method == "POST":
+                return httpx.Response(
+                    202,
+                    headers={"Location": "https://controller/progress/31"},
+                )
+            if request.url.path == "/progress/31":
+                poll_count += 1
+                return httpx.Response(
+                    200,
+                    json={
+                        "state": [
+                            {
+                                "state": "pending" if poll_count == 1 else "ready",
+                                "code": "0",
+                            }
+                        ]
+                    },
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "state": [
+                        {
+                            "_type": "rap-program",
+                            "name": "Production",
+                            "entrypoint": "main",
+                        }
+                    ]
+                },
+            )
+
+        with _client(handler) as client:
+            result = RapidService(client).load_program(
+                "T_ROB1",
+                "$HOME/app.pgf",
+                replace=True,
+                poll_interval=0.001,
+            )
+
+        self.assertEqual(result.status_code, 202)
+        self.assertEqual(result.progress_uri, "/progress/31")
+        self.assertEqual(result.progress_state, "ready")
+        self.assertEqual(result.progress_code, "0")
+        self.assertEqual(
+            calls,
+            [
+                "POST /rw/rapid/tasks/T_ROB1/program/load",
+                "GET /progress/31",
+                "GET /progress/31",
+                "GET /rw/rapid/tasks/T_ROB1/program",
+            ],
+        )
+
+    def test_whole_program_load_rejects_terminal_progress_failure(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            if request.method == "POST":
+                return httpx.Response(
+                    202,
+                    headers={"Location": "/progress/32"},
+                )
+            return httpx.Response(
+                200,
+                json={"state": [{"state": "failed", "code": "-1"}]},
+            )
+
+        with _client(handler) as client:
+            with self.assertRaisesRegex(ProtocolError, "program load failed"):
+                RapidService(client).load_program("T_ROB1", "$HOME/app.pgf")
 
     def test_no_content_means_no_whole_program_is_loaded(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:

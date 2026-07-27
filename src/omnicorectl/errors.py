@@ -24,6 +24,10 @@ class AuthorizationError(OmnicoreError):
     """The user lacks the required controller grant. / 已认证用户缺少所需控制器权限。"""
 
 
+class ControllerStateError(OmnicoreError):
+    """The controller state prevents the requested action. / 控制器状态阻止了请求操作。"""
+
+
 class ProtocolError(OmnicoreError):
     """The controller returned an unexpected RWS payload. / 控制器返回了异常 RWS 数据。"""
 

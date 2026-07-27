@@ -10,6 +10,7 @@ from pathlib import PurePosixPath
 from omnicorectl.errors import ConfigurationError, ProtocolError
 from omnicorectl.rws.client import RwsClient
 from omnicorectl.rws.hal import first_state, required_text
+from omnicorectl.rws.progress import ProgressService
 from omnicorectl.services.files import FileService
 
 
@@ -80,17 +81,13 @@ class BackupService:
                 "archive": "TRUE" if archive else "FALSE",
             },
         )
-        deadline = self._clock() + timeout
-        while True:
-            progress = _parse_progress(self._client.get_json(progress_uri))
-            if progress.state.lower() != "pending":
-                break
-            if self._clock() >= deadline:
-                raise ProtocolError(
-                    f"backup did not complete within {timeout:g} seconds; "
-                    f"progress remains at {progress_uri}"
-                )
-            self._sleep(min(poll_interval, max(0.0, deadline - self._clock())))
+        progress = ProgressService(
+            self._client, clock=self._clock, sleep=self._sleep
+        ).wait(
+            progress_uri,
+            timeout=timeout,
+            poll_interval=poll_interval,
+        )
 
         if progress.state.lower() != "ready" or progress.code not in {
             "294912",
@@ -110,13 +107,6 @@ class BackupService:
         )
 
 
-@dataclass(frozen=True, slots=True)
-class _Progress:
-    state: str
-    code: str
-    resource_path: str
-
-
 def _backup_destination(path: str) -> str:
     segments = [segment for segment in path.strip("/").split("/") if segment]
     if not segments:
@@ -126,21 +116,3 @@ def _backup_destination(path: str) -> str:
     if segments[0].lower() == "$home":
         raise ConfigurationError("ABB does not allow backups under $HOME")
     return "/" + "/".join(segments)
-
-
-def _parse_progress(payload: dict[str, object]) -> _Progress:
-    states = payload.get("state")
-    if not isinstance(states, list) or not states or not isinstance(states[0], dict):
-        raise ProtocolError("backup progress: expected a non-empty state list")
-    item = states[0]
-    state = required_text(item, "state", resource="backup progress")
-    code = required_text(item, "code", resource="backup progress")
-    resource_path = ""
-    links = item.get("_links")
-    if isinstance(links, dict):
-        resource = links.get("resource")
-        if isinstance(resource, dict):
-            href = resource.get("href")
-            if isinstance(href, str):
-                resource_path = href
-    return _Progress(state=state, code=code, resource_path=resource_path)

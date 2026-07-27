@@ -29,6 +29,10 @@ individual guards and must be selected explicitly. `--dry-run` performs local
 validation and displays the diff without requesting write access. Use
 `--if-change-count N` in automation to reject stale edits.
 
+With `--json`, a source-edit dry run emits one JSON object containing
+`changed`, `change_count`, and `diff`. It never mixes a textual diff into the
+JSON stream and never requests write access.
+
 Complete source reads accept both RobotWare response forms: an inline
 `module-text` field and the RW8.1 `file-path` reference to a temporary
 FileService object. Temporary source files are downloaded as strict UTF-8
@@ -44,6 +48,7 @@ omnicorectl rapid validate MainModule.mod --expected-module MainModule --json
 
 # Preview and then apply the same file.
 omnicorectl rapid write T_ROB1 MainModule MainModule.mod --dry-run
+omnicorectl rapid write T_ROB1 MainModule MainModule.mod --dry-run --json
 omnicorectl rapid write T_ROB1 MainModule MainModule.mod \
   --if-change-count 421455 --backup MainModule.before.mod --yes
 
@@ -65,6 +70,12 @@ a replaced module is restored with a change-count guard. Rollback and cleanup
 failures do not hide the original deployment error. `load` operates on a file
 that already exists in the controller file system.
 
+Whole-program loading accepts both synchronous HTTP 204 completion and
+asynchronous HTTP 202 completion. For an asynchronous response, the command
+validates the returned `/progress/{id}` URI, polls it until completion, and
+then reads the loaded program back. `--wait-timeout` and `--poll-interval`
+control this bounded wait.
+
 ```bash
 omnicorectl rapid deploy T_ROB1 ./MainModule.mod --replace --yes
 omnicorectl rapid load T_ROB1 '$HOME/MainModule.modx' --replace --yes
@@ -74,7 +85,8 @@ omnicorectl rapid build T_ROB1 --yes
 omnicorectl rapid errors T_ROB1 --json
 
 omnicorectl rapid program info T_ROB1 --json
-omnicorectl rapid program load T_ROB1 '$HOME/application.pgf' --replace --yes
+omnicorectl rapid program load T_ROB1 '$HOME/application.pgf' --replace \
+  --wait-timeout 120 --poll-interval 0.25 --yes
 omnicorectl rapid program save T_ROB1 '$HOME/application' --yes
 omnicorectl rapid program set-name T_ROB1 Production --yes
 omnicorectl rapid program set-entrypoint T_ROB1 main --yes
@@ -143,6 +155,10 @@ Station Motion Control inside the write-access scope. It always disables and
 verifies Motion Control again after the start request, including when that
 request fails. The authenticated user still needs the relevant RAPID execution
 and remote start/stop grants, and external control must be enabled.
+Before requesting write access, the command verifies `AUTO` mode and
+`motoron`. If the controller denies the later start request, it reads both
+states again so a safety-state transition is not misreported as a missing
+grant.
 
 `modify-position` updates a motion target from the robot's current position and
 has additional RobotWare preconditions. It is intentionally never invoked by
@@ -154,6 +170,10 @@ omnicorectl rapid modify-position T_ROB1 MainModule 15 1 15 80 --yes
 omnicorectl rapid activate-task T_ROB1 --yes
 omnicorectl rapid deactivate-task T_ROB1 --yes
 ```
+
+If no modifiable motion target exists in the requested range, RW8.1 may omit
+all four position fields. The command reports `count: 0` and JSON `null`
+positions instead of treating that valid empty result as a protocol error.
 
 ## Exit behavior
 

@@ -57,9 +57,7 @@ class ControllerService:
         identity = first_state(
             self._client.get_json("/ctrl/identity"), resource="controller identity"
         )
-        operation_mode = first_state(
-            self._client.get_json("/rw/panel/opmode"), resource="operation mode"
-        )
+        operation_mode = self.operation_mode()
         controller_state = self.controller_state()
         execution = first_state(
             self._client.get_json("/rw/rapid/execution"),
@@ -77,9 +75,7 @@ class ControllerService:
             mac_address=required_text(
                 identity, "ctrl-mac", resource="controller identity"
             ),
-            operation_mode=required_text(
-                operation_mode, "opmode", resource="operation mode"
-            ),
+            operation_mode=operation_mode,
             controller_state=controller_state,
             rapid_execution=required_text(
                 execution, "ctrlexecstate", resource="RAPID execution"
@@ -88,6 +84,12 @@ class ControllerService:
                 execution, "cycle", resource="RAPID execution"
             ),
         )
+
+    def operation_mode(self) -> str:
+        state = first_state(
+            self._client.get_json("/rw/panel/opmode"), resource="operation mode"
+        )
+        return required_text(state, "opmode", resource="operation mode")
 
     def controller_state(self) -> str:
         state = first_state(

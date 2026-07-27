@@ -14,7 +14,12 @@ import httpx
 from unittest.mock import patch
 
 from omnicorectl.cli import build_parser, main
-from omnicorectl.errors import ConfigurationError, RwsHttpError
+from omnicorectl.errors import (
+    AuthorizationError,
+    ConfigurationError,
+    ControllerStateError,
+    RwsHttpError,
+)
 from omnicorectl.rapid_cli import dispatch_rapid
 from omnicorectl.rws import RwsClient
 from omnicorectl.services.control_station import RemoteControlStation
@@ -52,6 +57,10 @@ class RapidCliTests(unittest.TestCase):
             if request.url.path == "/logout":
                 return httpx.Response(200, json={})
             calls.append(f"{request.method} {request.url.path}")
+            if request.url.path == "/rw/panel/opmode":
+                return httpx.Response(200, json={"state": [{"opmode": "AUTO"}]})
+            if request.url.path == "/rw/panel/ctrl-state":
+                return httpx.Response(200, json={"state": [{"ctrlstate": "motoron"}]})
             if request.url.path.endswith("/writeaccess/status"):
                 return httpx.Response(
                     200,
@@ -104,6 +113,8 @@ class RapidCliTests(unittest.TestCase):
         self.assertEqual(
             calls,
             [
+                "GET /rw/panel/opmode",
+                "GET /rw/panel/ctrl-state",
                 "POST /rw/controlstation/register/remote",
                 "POST /rw/controlstation/writeaccess/request",
                 "GET /rw/controlstation/writeaccess/status",
@@ -127,6 +138,10 @@ class RapidCliTests(unittest.TestCase):
             nonlocal motion_enabled, released
             if request.url.path == "/logout":
                 return httpx.Response(200, json={})
+            if request.url.path == "/rw/panel/opmode":
+                return httpx.Response(200, json={"state": [{"opmode": "AUTO"}]})
+            if request.url.path == "/rw/panel/ctrl-state":
+                return httpx.Response(200, json={"state": [{"ctrlstate": "motoron"}]})
             if request.url.path.endswith("/writeaccess/status"):
                 return httpx.Response(
                     200,
@@ -170,6 +185,145 @@ class RapidCliTests(unittest.TestCase):
 
         self.assertFalse(motion_enabled)
         self.assertTrue(released)
+
+    def test_start_preflight_reports_controller_state_without_write_access(
+        self,
+    ) -> None:
+        calls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            calls.append(f"{request.method} {request.url.path}")
+            if request.url.path == "/rw/panel/opmode":
+                return httpx.Response(200, json={"state": [{"opmode": "AUTO"}]})
+            if request.url.path == "/rw/panel/ctrl-state":
+                return httpx.Response(
+                    200, json={"state": [{"ctrlstate": "emergencystop"}]}
+                )
+            raise AssertionError(f"unexpected request: {request.url}")
+
+        args = build_parser().parse_args(["rapid", "start", "--yes"])
+        with _client(handler) as client:
+            with self.assertRaisesRegex(ControllerStateError, "emergencystop"):
+                dispatch_rapid(client, args, _unexpected_station)
+
+        self.assertEqual(
+            calls,
+            ["GET /rw/panel/opmode", "GET /rw/panel/ctrl-state"],
+        )
+
+    def test_denied_start_rechecks_state_and_preserves_cleanup(self) -> None:
+        station_id = "12345678-1234-5678-9abc-123456789abc"
+        motion_enabled = False
+        released = False
+        state_reads = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal motion_enabled, released, state_reads
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            if request.url.path == "/rw/panel/opmode":
+                return httpx.Response(200, json={"state": [{"opmode": "AUTO"}]})
+            if request.url.path == "/rw/panel/ctrl-state":
+                state_reads += 1
+                state = "motoron" if state_reads == 1 else "guardstop"
+                return httpx.Response(200, json={"state": [{"ctrlstate": state}]})
+            if request.url.path.endswith("/writeaccess/status"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "state": [
+                            {
+                                "control-station-write-access-held": "true",
+                                "control-station-external-control-enabled": "true",
+                                "held-by-control-station-Id": f"{{{station_id}}}",
+                                "held-by-control-station-name": "state race test",
+                            }
+                        ]
+                    },
+                )
+            if request.url.path == "/rw/controlstation/allowmotioncontrol":
+                if request.method == "POST":
+                    form = parse_qs(request.content.decode())
+                    motion_enabled = form["allow-motion-control"] == ["true"]
+                    return httpx.Response(204)
+                return httpx.Response(
+                    200,
+                    json={
+                        "state": [{"is-enabled": "true" if motion_enabled else "false"}]
+                    },
+                )
+            if request.url.path == "/rw/rapid/execution/start":
+                return httpx.Response(
+                    403,
+                    json={"status": {"code": -1, "msg": "request denied"}},
+                )
+            if request.url.path.endswith("/writeaccess/release"):
+                released = True
+            return httpx.Response(204)
+
+        args = build_parser().parse_args(["rapid", "start", "--yes"])
+        station = RemoteControlStation("state race test", station_id, "1234")
+        with _client(handler) as client:
+            with self.assertRaisesRegex(ControllerStateError, "guardstop"):
+                dispatch_rapid(client, args, lambda: station)
+
+        self.assertFalse(motion_enabled)
+        self.assertTrue(released)
+        self.assertEqual(state_reads, 2)
+
+    def test_denied_start_with_valid_state_remains_authorization_error(self) -> None:
+        station_id = "12345678-1234-5678-9abc-123456789abc"
+        motion_enabled = False
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal motion_enabled
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            if request.url.path == "/rw/panel/opmode":
+                return httpx.Response(200, json={"state": [{"opmode": "AUTO"}]})
+            if request.url.path == "/rw/panel/ctrl-state":
+                return httpx.Response(200, json={"state": [{"ctrlstate": "motoron"}]})
+            if request.url.path.endswith("/writeaccess/status"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "state": [
+                            {
+                                "control-station-write-access-held": "true",
+                                "control-station-external-control-enabled": "true",
+                                "held-by-control-station-Id": f"{{{station_id}}}",
+                                "held-by-control-station-name": "authorization test",
+                            }
+                        ]
+                    },
+                )
+            if request.url.path == "/rw/controlstation/allowmotioncontrol":
+                if request.method == "POST":
+                    form = parse_qs(request.content.decode())
+                    motion_enabled = form["allow-motion-control"] == ["true"]
+                    return httpx.Response(204)
+                return httpx.Response(
+                    200,
+                    json={
+                        "state": [{"is-enabled": "true" if motion_enabled else "false"}]
+                    },
+                )
+            if request.url.path == "/rw/rapid/execution/start":
+                return httpx.Response(
+                    403,
+                    json={"status": {"code": -1, "msg": "request denied"}},
+                )
+            return httpx.Response(204)
+
+        args = build_parser().parse_args(["rapid", "start", "--yes"])
+        station = RemoteControlStation("authorization test", station_id, "1234")
+        with _client(handler) as client:
+            with self.assertRaises(AuthorizationError):
+                dispatch_rapid(client, args, lambda: station)
+
+        self.assertFalse(motion_enabled)
 
     def test_stop_and_reset_do_not_enable_motion_control(self) -> None:
         station_id = "12345678-1234-5678-9abc-123456789abc"
@@ -356,6 +510,91 @@ class RapidCliTests(unittest.TestCase):
             with _client(handler) as client:
                 with self.assertRaisesRegex(ConfigurationError, "concurrently"):
                     dispatch_rapid(client, args, _unexpected_station)
+
+    def test_write_dry_run_json_is_machine_readable(self) -> None:
+        original = "MODULE MainModule\nENDMODULE\n"
+        changed = "MODULE MainModule\n    ! agent edit\nENDMODULE\n"
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            return httpx.Response(
+                200,
+                json={
+                    "state": [
+                        {
+                            "change-count": "7",
+                            "module-length": str(len(original)),
+                            "module-text": original,
+                        }
+                    ]
+                },
+            )
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "MainModule.mod"
+            source.write_text(changed, encoding="utf-8")
+            args = build_parser().parse_args(
+                [
+                    "rapid",
+                    "write",
+                    "T_ROB1",
+                    "MainModule",
+                    str(source),
+                    "--dry-run",
+                    "--json",
+                ]
+            )
+            stdout = io.StringIO()
+            with _client(handler) as client, contextlib.redirect_stdout(stdout):
+                dispatch_rapid(client, args, _unexpected_station)
+
+        result = json.loads(stdout.getvalue())
+        self.assertEqual(result["task"], "T_ROB1")
+        self.assertEqual(result["module"], "MainModule")
+        self.assertTrue(result["dry_run"])
+        self.assertTrue(result["changed"])
+        self.assertEqual(result["change_count"], 7)
+        self.assertIn("+    ! agent edit", result["diff"])
+
+    def test_edit_dry_run_json_reports_no_changes(self) -> None:
+        original = "MODULE MainModule\nENDMODULE\n"
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/logout":
+                return httpx.Response(200, json={})
+            return httpx.Response(
+                200,
+                json={
+                    "state": [
+                        {
+                            "change-count": "7",
+                            "module-length": str(len(original)),
+                            "module-text": original,
+                        }
+                    ]
+                },
+            )
+
+        args = build_parser().parse_args(
+            [
+                "rapid",
+                "edit",
+                "T_ROB1",
+                "MainModule",
+                "--editor",
+                "true",
+                "--dry-run",
+                "--json",
+            ]
+        )
+        stdout = io.StringIO()
+        with _client(handler) as client, contextlib.redirect_stdout(stdout):
+            dispatch_rapid(client, args, _unexpected_station)
+
+        result = json.loads(stdout.getvalue())
+        self.assertFalse(result["changed"])
+        self.assertEqual(result["diff"], "")
 
     def test_search_not_found_emits_valid_json_null(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
