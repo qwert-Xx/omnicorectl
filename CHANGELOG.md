@@ -14,6 +14,13 @@
 
 新克隆本仓库后，执行 `git config core.hooksPath .githooks` 启用提交前校验。
 
+## 2026-08-09 - 补齐自定义钩子目录中的 Git LFS 钩子
+
+- 变更内容：在 `.githooks` 中加入 Git LFS 标准的 `post-checkout`、`post-commit`、`post-merge` 和 `pre-push` 钩子，与中文更新日志校验共同使用。
+- 完成/修复：修复设置 `core.hooksPath=.githooks` 后原 `.git/hooks` 中的 Git LFS 钩子不再生效的问题，保留检出、提交、合并和推送阶段的 LFS 处理。
+- 验证：确认四个脚本均由 Git LFS 生成、具有可执行权限并通过 Shell 语法检查，同时执行 `git lfs fsck` 验证本地 LFS 对象状态正常。
+- 影响：只补全 Git 生命周期与 LFS 上传校验，不改变 `omnicorectl` 的 Python 接口、RWS 通信或控制器行为；使用 LFS 的环境仍需安装 `git-lfs`。
+
 ## 2026-08-09 - 建立中文更新日志与提交校验制度
 
 - 变更内容：为 `omnicorectl` 新增独立更新日志和版本化提交前钩子，要求每次提交同时记录结构化中文说明。
