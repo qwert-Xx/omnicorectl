@@ -1,0 +1,45 @@
+#!/bin/sh
+set -eu
+
+changelog="CHANGELOG.md"
+
+if git diff --cached --quiet -- "$changelog"; then
+    echo "错误：本次提交没有暂存 $changelog 的更新。" >&2
+    echo "请使用中文填写：变更内容、完成/修复、验证、影响。" >&2
+    exit 1
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "错误：无法执行更新日志校验，因为系统中没有 python3。" >&2
+    exit 1
+fi
+
+if ! git diff --cached --unified=0 -- "$changelog" | python3 -c '
+import re
+import sys
+
+lines = sys.stdin.read().splitlines()
+added = [line[1:] for line in lines if line.startswith("+") and not line.startswith("+++")]
+fields = ("- 变更内容：", "- 完成/修复：", "- 验证：", "- 影响：")
+placeholders = {"无", "待补充", "待填写", "TODO", "TBD", "N/A", "NA", "-"}
+values = []
+
+for field in fields:
+    candidates = [line[len(field):].strip() for line in added if line.startswith(field)]
+    valid = [
+        value for value in candidates
+        if value not in placeholders
+        and len(re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff]", value)) >= 4
+    ]
+    if not valid:
+        print(f"错误：本次新增内容缺少有效字段 {field}", file=sys.stderr)
+        sys.exit(1)
+    values.append(valid[0])
+
+chinese_count = len(re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff]", "".join(values)))
+if chinese_count < 30:
+    print("错误：四个字段的中文说明过短，请详细记录本次提交。", file=sys.stderr)
+    sys.exit(1)
+'; then
+    exit 1
+fi
